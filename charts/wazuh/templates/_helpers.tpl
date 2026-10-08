@@ -107,10 +107,10 @@ opensearch_security.auth.multiple_auth_enabled: {{ gt ($authType | len) 1 }}
 opensearch_security.auth.type: {{ $authType | toJson }}
 
 {{- if .Values.dashboard.sso.oidc.enabled }}
-{{- $baseRedirectUrl := .Values.dashboard.sso.oidc.baseRedirectUrl | default .Values.dashboard.ingress.host }}
+{{- $baseRedirectUrl := .Values.dashboard.sso.oidc.baseRedirectUrl }}
 opensearch_security.openid.connect_url: {{ required "dashboard.sso.oidc.url is required" .Values.dashboard.sso.oidc.url }}
 opensearch_security.openid.logout_url: {{ required "dashboard.sso.oidc.logoutUrl is required" .Values.dashboard.sso.oidc.logoutUrl }}
-opensearch_security.openid.base_redirect_url: {{ required "dashboard.sso.oidc.baseRedirectUrl is required" $baseRedirectUrl }}
+opensearch_security.openid.base_redirect_url: {{ if $baseRedirectUrl }}{{ $baseRedirectUrl }}{{ else }}{{ include "wazuh.dashboard.publicURL" . }}{{ end }}
 opensearch_security.openid.scope: {{ .Values.dashboard.sso.oidc.scope }}
 opensearch_security.openid.client_id: ${OPENSEARCH_OIDC_CLIENT_ID}
 opensearch_security.openid.client_secret: ${OPENSEARCH_OIDC_CLIENT_SECRET}
@@ -178,6 +178,31 @@ Define serviceaccount names
 {{- end -}}
 {{- end -}}
 
+{{- define "wazuh.dashboard.gateway.tlsSecretName" -}}
+{{- if .Values.dashboard.gateway.tls.certificate.create -}}
+{{- .Values.dashboard.gateway.tls.secretName | default (printf "%s-dashboard-letsencrypt" (include "wazuh.fullname" .)) -}}
+{{- else -}}
+{{- required "dashboard.gateway.tls.secretName is required when dashboard.gateway.tls.certificate.create is false" .Values.dashboard.gateway.tls.secretName -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Whether to mount our own filebeat.yml. Only when asked for, so existing releases keep
+using the image's own file.
+*/}}
+{{- define "wazuh.filebeat.overridden" -}}
+{{- if or (include "wazuh.archives.enabled" .) ((.Values.wazuh.filebeat).config) -}}
+true
+{{- end -}}
+{{- end -}}
+
+
+{{- define "wazuh.archives.enabled" -}}
+{{- if (.Values.wazuh.archives).enabled -}}
+true
+{{- end -}}
+{{- end -}}
+
 {{- define "wazuh.manager.serviceAccountName" -}}
 {{- if .Values.wazuh.serviceAccount.create -}}
     {{ default (printf "%s-manager" (include "wazuh.fullname" .)) .Values.wazuh.serviceAccount.name }}
@@ -191,5 +216,33 @@ Define serviceaccount names
     {{ default (printf "%s-agent" (include "wazuh.fullname" .)) .Values.agent.serviceAccount.name }}
 {{- else -}}
     {{ "default" }}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Public dashboard URL used to build SSO callback URLs (SAML kibana_url,
+OIDC base_redirect_url) when they are not set explicitly. The Ingress and legacy
+fallbacks preserve the existing HTTPS behaviour. A chart-managed ListenerSet
+derives its scheme from dashboard.gateway.tls.enabled. For direct Gateway
+attachment, the listener scheme is unknown, so callers must provide explicit URLs.
+*/}}
+{{- define "wazuh.dashboard.publicURL" -}}
+{{- if .Values.dashboard.ingress.enabled -}}
+{{- $host := required "dashboard.ingress.host is required" .Values.dashboard.ingress.host -}}
+{{- printf "https://%s" $host -}}
+{{- else if .Values.dashboard.gateway.enabled -}}
+{{- $host := required "dashboard.gateway.host is required" .Values.dashboard.gateway.host -}}
+{{- if .Values.dashboard.gateway.listenerSet.enabled -}}
+{{- if .Values.dashboard.gateway.tls.enabled -}}
+{{- printf "https://%s" $host -}}
+{{- else -}}
+{{- printf "http://%s" $host -}}
+{{- end -}}
+{{- else -}}
+{{- fail "dashboard.gateway.listenerSet.enabled=false requires dashboard.sso.saml.kibanaUrl or dashboard.sso.oidc.baseRedirectUrl to be set explicitly" -}}
+{{- end -}}
+{{- else -}}
+{{- $host := required "dashboard.ingress.host is required" .Values.dashboard.ingress.host -}}
+{{- printf "https://%s" $host -}}
 {{- end -}}
 {{- end -}}

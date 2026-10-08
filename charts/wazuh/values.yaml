@@ -533,6 +533,9 @@ dashboard:
       primary: false
       url: ""
       logoutUrl: ""
+      ## Public dashboard URL used as OIDC base_redirect_url. Defaults to
+      ## https://<dashboard.ingress.host>, or to the chart-managed Gateway listener URL.
+      ## Set explicitly for direct Gateway attachment.
       baseRedirectUrl: ""
       scope: "openid profile email address phone"
       issuer: ""
@@ -574,6 +577,9 @@ dashboard:
         -----BEGIN CERTIFICATE-----
         -----END CERTIFICATE-----
       spEntityId: "wazuh-saml"
+      ## Public dashboard URL used as SAML kibana_url. Defaults to https://<dashboard.ingress.host>,
+      ## or to the chart-managed Gateway listener URL. When
+      ## dashboard.gateway.listenerSet.enabled=false, set this explicitly.
       kibanaUrl: ""
       order: 1
       exchangeKey: ""
@@ -600,6 +606,45 @@ dashboard:
     annotations: {}
     host: "wazuh.example.com"
 
+  ## @param dashboard.gateway.enabled Enable Gateway API resources (HTTPRoute + parent) for dashboard, as an alternative to dashboard.ingress.
+  ## @param dashboard.gateway.host Defines the hostname under which the dashboard is exposed through the Gateway.
+  ## @param dashboard.gateway.annotations Annotations to add on the ListenerSet.
+  ## @param dashboard.gateway.parentRef.group Group of the parent Gateway reference.
+  ## @param dashboard.gateway.parentRef.kind Kind of the parent Gateway reference.
+  ## @param dashboard.gateway.parentRef.name Name of the parent Gateway. Required when dashboard.gateway.enabled is true.
+  ## @param dashboard.gateway.parentRef.namespace Namespace of the parent Gateway. Leave empty when the Gateway is in the same namespace.
+  ## @param dashboard.gateway.listenerSet.enabled Create a dedicated ListenerSet and attach the HTTPRoute to it. Disable to attach the HTTPRoute directly to the parent Gateway, for Gateways that do not allow ListenerSets (spec.allowedListeners).
+  ## @param dashboard.gateway.tls.enabled Terminate edge TLS (client to Gateway) on the listener for the dashboard hostname.
+  ## @param dashboard.gateway.tls.secretName Name of the Secret holding the edge TLS certificate. Defaults to "<fullname>-dashboard-letsencrypt" when tls.certificate.create is true.
+  ## @param dashboard.gateway.tls.certificate.create Let the chart create a cert-manager Certificate for the edge TLS secret. Set to false to reuse an existing Secret referenced by tls.secretName.
+  ## @param dashboard.gateway.tls.issuerRef.name Name of the cert-manager issuer used to sign the edge TLS certificate. Required when tls.certificate.create is true.
+  ## @param dashboard.gateway.tls.issuerRef.kind Kind of the issuer used for signing the edge TLS certificate (Issuer or ClusterIssuer).
+  ## @param dashboard.gateway.tls.issuerRef.group Group of the issuer used for signing the edge TLS certificate.
+  ## @param dashboard.gateway.backendTLS.caCertificateRef.name Name of an existing ConfigMap (key ca.crt) used by the Gateway to validate the dashboard backend TLS certificate. Required when dashboard.gateway.enabled and dashboard.enable_ssl are both true.
+  gateway:
+    enabled: false
+    host: "wazuh.example.com"
+    annotations: {}
+    parentRef:
+      group: gateway.networking.k8s.io
+      kind: Gateway
+      name: ""
+      namespace: ""
+    listenerSet:
+      enabled: true
+    tls:
+      enabled: false
+      secretName: ""
+      certificate:
+        create: true
+      issuerRef:
+        name: ""
+        kind: ClusterIssuer
+        group: cert-manager.io
+    backendTLS:
+      caCertificateRef:
+        name: ""
+
   ## @skip dashboard.extraSpec
   extraSpec:
     deployment: {}
@@ -620,6 +665,13 @@ wazuh:
     name: "wazuh-manager"
   ## @param wazuh.syslog_enable Enables the syslog of the wazuh instance.
   syslog_enable: true
+  ## Without this only alerts are indexed, so events matching no rule are dropped. Sets
+  ## <logall_json> on the managers and enables filebeat's archives fileset; both are needed,
+  ## so it is one switch. Archives are unfiltered, expect much more indexer storage.
+  ## Does not apply to a file replaced by masterConf, workerConf or filebeat.config.
+  ## @param wazuh.archives.enabled Index every event, not just alerts.
+  archives:
+    enabled: false
   ## @param wazuh.key Defines the key of the wazuh cluster.
   key: "c98b62a9b6169ac5f67dae55ae4a9088"
   ## @param wazuh.images.repository name of the image used.
@@ -636,9 +688,19 @@ wazuh:
       secret: {}
   ## @param wazuh.loadBalancer.enabled Enable LoadBalancer service for external agent connections
   ## @param wazuh.loadBalancer.annotations Annotations for LoadBalancer service
+  ## @param wazuh.loadBalancer.ports Inline array of port names to expose; empty means all ports are included
+  ## @param wazuh.loadBalancer.loadBalancerSourceRanges List of CIDR ranges allowed to reach the LoadBalancer; rendered whenever non-empty
+  ## @param wazuh.loadBalancer.externalTrafficPolicy External traffic policy for the LoadBalancer (e.g. Local or Cluster); omitted if empty
+  ## @param wazuh.loadBalancer.internalTrafficPolicy Internal traffic policy for the LoadBalancer (e.g. Cluster or Local); omitted if empty
+  ## @param wazuh.loadBalancer.allocateLoadBalancerNodePorts Whether to allocate node ports for the LoadBalancer; omitted if null
   loadBalancer:
     enabled: false
     annotations: {}
+    ports: ["registration", "agents-events"]
+    loadBalancerSourceRanges: []
+    externalTrafficPolicy: ""
+    internalTrafficPolicy: ""
+    allocateLoadBalancerNodePorts: null
   ## @param wazuh.service.annotations Annotations of the created service.
   ## @param wazuh.service.port Port for the http endpoint.
   service:
@@ -686,6 +748,8 @@ wazuh:
   ## to use that default; set a value to manage the config through values.yaml instead.
   ## @param wazuh.script Override for script.sh. If empty, files/script.sh is used.
   script: ""
+  ## Replaces the generated config, so wazuh.archives.enabled does not apply: set
+  ## <logall_json>yes</logall_json> here if you want archives.
   ## @param wazuh.masterConf Override for master.conf. If empty, the generated ossec config is used.
   masterConf: ""
   ## @param wazuh.workerConf Override for worker.conf. If empty, the generated ossec config is used.
@@ -696,6 +760,12 @@ wazuh:
   localRules: ""
   ## @param wazuh.internalOptions Override for internal_options.conf. If empty, files/internal_options.conf is used.
   internalOptions: ""
+  ## Replaces the whole file. Keep the `hosts:` line and the commented-out `#username:`,
+  ## `#password:` and `#ssl.*` keys: the entrypoint fills those in from the env vars, and
+  ## ships nothing without them. wazuh.archives.enabled does not apply, set archives here.
+  ## @param wazuh.filebeat.config Override for filebeat.yml. If empty, the generated config is used.
+  filebeat:
+    config: ""
   ## @skip wazuh.agentGroupConf
   agentGroupConf:
     - name: example

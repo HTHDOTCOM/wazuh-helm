@@ -1,6 +1,6 @@
 # wazuh
 
-![Version: 2.0.0](https://img.shields.io/badge/Version-2.0.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 4.14.3](https://img.shields.io/badge/AppVersion-4.14.3-informational?style=flat-square)
+![Version: 2.0.7](https://img.shields.io/badge/Version-2.0.7-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 4.14.3](https://img.shields.io/badge/AppVersion-4.14.3-informational?style=flat-square)
 [![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/wazuh-helm-morgoved)](https://artifacthub.io/packages/search?repo=wazuh-helm-morgoved)
 ## Introduction
 
@@ -51,6 +51,29 @@ helm install [RELEASE_NAME] wazuh-helm/wazuh
 When changing `indexer.cred.password` you also have to adjust `indexer.cred.passwordHash` in order to get the correct value, you have to hash the password with bcrypt and 12 rounds / costs. You can do so via CLI or some online converter in the web.
 
 Same applies when changing `dashboard.cred.password`
+
+### Archiving every event
+
+Wazuh only indexes alerts by default, so events matching no rule — syslog forwarded from
+another collector, for instance — are dropped and never reach the dashboard. To keep them:
+
+```yaml
+wazuh:
+  archives:
+    enabled: true
+```
+
+That sets `<logall_json>yes</logall_json>` on master and worker and enables filebeat's
+`archives` fileset. Both halves are required, which is why it is one switch. Archives are
+unfiltered, so expect a large increase in indexer storage.
+
+> NOTE!
+> The switch only reaches the *generated* configs. `wazuh.masterConf`, `wazuh.workerConf`
+> and `wazuh.filebeat.config` replace their file outright and therefore win over it. If you
+> set one of them, carry the setting yourself — `<logall_json>yes</logall_json>` in the ossec
+> config, `archives.enabled: true` in filebeat's `wazuh` module. Miss one half and either the
+> managers write archives that never ship, or filebeat tails a file nobody writes; neither
+> fails loudly.
 
 ## Parameters
 
@@ -187,185 +210,207 @@ Same applies when changing `dashboard.cred.password`
 
 ### dashboard configuration of the wazuh dashboard. Kibana for elasticsearch with Wazuh plugins
 
-| Name                                           | Description                                                            | Value                                                          |
-| ---------------------------------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------- |
-| `dashboard.enabled`                            | defines if we deploy dashboard or not                                  | `true`                                                         |
-| `dashboard.serviceAccount.create`              | Create service account                                                 | `false`                                                        |
-| `dashboard.serviceAccount.annotations`         | Annotations for service account                                        | `{}`                                                           |
-| `dashboard.serviceAccount.name`                | Name of the service account                                            | `wazuh-dashboard`                                              |
-| `dashboard.replicas`                           | number of replicas used in deployment.                                 | `1`                                                            |
-| `dashboard.annotations`                        | additional annotations set on deployment.                              | `{}`                                                           |
-| `dashboard.extraPodLabels`                     | Extra labels to add to the dashboard pods.                             | `{}`                                                           |
-| `dashboard.images.repository`                  | name of the image used.                                                | `wazuh/wazuh-dashboard`                                        |
-| `dashboard.images.tag`                         | Tag of the image.                                                      | `4.14.3`                                                       |
-| `dashboard.images.pullPolicy`                  | pullPolicy of the image.                                               | `IfNotPresent`                                                 |
-| `dashboard.images.updateStrategy`              | updateStrategy of the image.                                           | `OnDelete`                                                     |
-| `dashboard.resources.requests.cpu`             | Minimum CPU assigned to the pod.                                       | `500m`                                                         |
-| `dashboard.resources.requests.memory`          | Minimum memory assigned to the pod.                                    | `512Mi`                                                        |
-| `dashboard.resources.limits.cpu`               | Maximum CPU used by the pod.                                           | `1000m`                                                        |
-| `dashboard.resources.limits.memory`            | Maximum memory used by the pod.                                        | `1Gi`                                                          |
-| `dashboard.pdb.enabled`                        | Enables pdb for dashboard.                                             | `false`                                                        |
-| `dashboard.livenessProbe.periodSeconds`        | How often to perform the probe.                                        | `20`                                                           |
-| `dashboard.livenessProbe.timeoutSeconds`       | When the probe times out.                                              | `5`                                                            |
-| `dashboard.livenessProbe.failureThreshold`     | Minimum failures for the probe to be considered failed.                | `10`                                                           |
-| `dashboard.livenessProbe.successThreshold`     | Minimum successes.                                                     | `1`                                                            |
-| `dashboard.livenessProbe.initialDelaySeconds`  | Delay before liveness probe.                                           | `10`                                                           |
-| `dashboard.readinessProbe.periodSeconds`       | How often to perform the probe.                                        | `20`                                                           |
-| `dashboard.readinessProbe.timeoutSeconds`      | When the probe times out.                                              | `5`                                                            |
-| `dashboard.readinessProbe.failureThreshold`    | Minimum failures for the probe to be considered failed.                | `10`                                                           |
-| `dashboard.readinessProbe.successThreshold`    | Minimum successes.                                                     | `1`                                                            |
-| `dashboard.readinessProbe.initialDelaySeconds` | Delay before liveness probe.                                           | `10`                                                           |
-| `dashboard.securityContext`                    | Parameter to configure the securityContext of the pod.                 | `{}`                                                           |
-| `dashboard.networkPolicy.enabled`              | Specifies whether a NetworkPolicy should be created.                   | `true`                                                         |
-| `dashboard.networkPolicy.extraIngresses`       | specify additional ingress rules for the NetworkPolicy.                | `[]`                                                           |
-| `dashboard.networkPolicy.extraEgresses`        | specify additional egress rules for the NetworkPolicy.                 | `[]`                                                           |
-| `dashboard.service.type`                       | Type of the created service.                                           | `ClusterIP`                                                    |
-| `dashboard.service.annotations`                | Annotations of the created service.                                    | `{}`                                                           |
-| `dashboard.service.httpPort`                   | Port for the http endpoint.                                            | `5601`                                                         |
-| `dashboard.nodeSelector`                       | nodeSelector                                                           | `{}`                                                           |
-| `dashboard.tolerations`                        | Tolerations                                                            | `[]`                                                           |
-| `dashboard.affinity`                           | Affinity                                                               | `{}`                                                           |
-| `dashboard.dnsPolicy`                          | DNS policy for the pod                                                 | `""`                                                           |
-| `dashboard.dnsConfig`                          | DNS configuration for the pod                                          | `{}`                                                           |
-| `dashboard.additionalEnv`                      | Possibility to define additional env vars in the pod.                  | `[]`                                                           |
-| `dashboard.enable_ssl`                         | with this you will be able to access kibana on http port instead of    | `false`                                                        |
-| `dashboard.config`                             | Configuration of the dashboard parameters, this should not be changed. | `{{ include "wazuh.dashboard.config" . }}
+| Name                                                 | Description                                                                                                                                                                                         | Value                                                          |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `dashboard.enabled`                                  | defines if we deploy dashboard or not                                                                                                                                                               | `true`                                                         |
+| `dashboard.serviceAccount.create`                    | Create service account                                                                                                                                                                              | `false`                                                        |
+| `dashboard.serviceAccount.annotations`               | Annotations for service account                                                                                                                                                                     | `{}`                                                           |
+| `dashboard.serviceAccount.name`                      | Name of the service account                                                                                                                                                                         | `wazuh-dashboard`                                              |
+| `dashboard.replicas`                                 | number of replicas used in deployment.                                                                                                                                                              | `1`                                                            |
+| `dashboard.annotations`                              | additional annotations set on deployment.                                                                                                                                                           | `{}`                                                           |
+| `dashboard.extraPodLabels`                           | Extra labels to add to the dashboard pods.                                                                                                                                                          | `{}`                                                           |
+| `dashboard.images.repository`                        | name of the image used.                                                                                                                                                                             | `wazuh/wazuh-dashboard`                                        |
+| `dashboard.images.tag`                               | Tag of the image.                                                                                                                                                                                   | `4.14.3`                                                       |
+| `dashboard.images.pullPolicy`                        | pullPolicy of the image.                                                                                                                                                                            | `IfNotPresent`                                                 |
+| `dashboard.images.updateStrategy`                    | updateStrategy of the image.                                                                                                                                                                        | `OnDelete`                                                     |
+| `dashboard.resources.requests.cpu`                   | Minimum CPU assigned to the pod.                                                                                                                                                                    | `500m`                                                         |
+| `dashboard.resources.requests.memory`                | Minimum memory assigned to the pod.                                                                                                                                                                 | `512Mi`                                                        |
+| `dashboard.resources.limits.cpu`                     | Maximum CPU used by the pod.                                                                                                                                                                        | `1000m`                                                        |
+| `dashboard.resources.limits.memory`                  | Maximum memory used by the pod.                                                                                                                                                                     | `1Gi`                                                          |
+| `dashboard.pdb.enabled`                              | Enables pdb for dashboard.                                                                                                                                                                          | `false`                                                        |
+| `dashboard.livenessProbe.periodSeconds`              | How often to perform the probe.                                                                                                                                                                     | `20`                                                           |
+| `dashboard.livenessProbe.timeoutSeconds`             | When the probe times out.                                                                                                                                                                           | `5`                                                            |
+| `dashboard.livenessProbe.failureThreshold`           | Minimum failures for the probe to be considered failed.                                                                                                                                             | `10`                                                           |
+| `dashboard.livenessProbe.successThreshold`           | Minimum successes.                                                                                                                                                                                  | `1`                                                            |
+| `dashboard.livenessProbe.initialDelaySeconds`        | Delay before liveness probe.                                                                                                                                                                        | `10`                                                           |
+| `dashboard.readinessProbe.periodSeconds`             | How often to perform the probe.                                                                                                                                                                     | `20`                                                           |
+| `dashboard.readinessProbe.timeoutSeconds`            | When the probe times out.                                                                                                                                                                           | `5`                                                            |
+| `dashboard.readinessProbe.failureThreshold`          | Minimum failures for the probe to be considered failed.                                                                                                                                             | `10`                                                           |
+| `dashboard.readinessProbe.successThreshold`          | Minimum successes.                                                                                                                                                                                  | `1`                                                            |
+| `dashboard.readinessProbe.initialDelaySeconds`       | Delay before liveness probe.                                                                                                                                                                        | `10`                                                           |
+| `dashboard.securityContext`                          | Parameter to configure the securityContext of the pod.                                                                                                                                              | `{}`                                                           |
+| `dashboard.networkPolicy.enabled`                    | Specifies whether a NetworkPolicy should be created.                                                                                                                                                | `true`                                                         |
+| `dashboard.networkPolicy.extraIngresses`             | specify additional ingress rules for the NetworkPolicy.                                                                                                                                             | `[]`                                                           |
+| `dashboard.networkPolicy.extraEgresses`              | specify additional egress rules for the NetworkPolicy.                                                                                                                                              | `[]`                                                           |
+| `dashboard.service.type`                             | Type of the created service.                                                                                                                                                                        | `ClusterIP`                                                    |
+| `dashboard.service.annotations`                      | Annotations of the created service.                                                                                                                                                                 | `{}`                                                           |
+| `dashboard.service.httpPort`                         | Port for the http endpoint.                                                                                                                                                                         | `5601`                                                         |
+| `dashboard.nodeSelector`                             | nodeSelector                                                                                                                                                                                        | `{}`                                                           |
+| `dashboard.tolerations`                              | Tolerations                                                                                                                                                                                         | `[]`                                                           |
+| `dashboard.affinity`                                 | Affinity                                                                                                                                                                                            | `{}`                                                           |
+| `dashboard.dnsPolicy`                                | DNS policy for the pod                                                                                                                                                                              | `""`                                                           |
+| `dashboard.dnsConfig`                                | DNS configuration for the pod                                                                                                                                                                       | `{}`                                                           |
+| `dashboard.additionalEnv`                            | Possibility to define additional env vars in the pod.                                                                                                                                               | `[]`                                                           |
+| `dashboard.enable_ssl`                               | with this you will be able to access kibana on http port instead of                                                                                                                                 | `false`                                                        |
+| `dashboard.config`                                   | Configuration of the dashboard parameters, this should not be changed.                                                                                                                              | `{{ include "wazuh.dashboard.config" . }}
 `                    |
-| `dashboard.cred.existingSecret`                | Name of the existingSecret                                             | `""`                                                           |
-| `dashboard.cred.password`                      | Value of the password for the kibanaserver user.                       | `kibanaserver`                                                 |
-| `dashboard.cred.username`                      | Value of the username                                                  | `kibanaserver`                                                 |
-| `dashboard.cred.passwordHash`                  | Hash of the password                                                   | `$2a$12$7NCZ.l9ntPhou5zNjZIU4uqXNNWMF7SyF6Y6mcjhHTB6Z1eQubHC.` |
-| `dashboard.basicAuth.enabled`                  | Enable basicAuth                                                       | `true`                                                         |
-| `dashboard.basicAuth.order`                    | Order for basicAuth                                                    | `4`                                                            |
-| `dashboard.basicAuth.challenge`                | Challenge for basicAuth                                                | `true`                                                         |
-| `dashboard.server.extraConf`                   | Set extra config for Wazuh Dashboard                                   | `{}`                                                           |
-| `dashboard.ingress.enabled`                    | Enable ingress record generation for dashboard.                        | `false`                                                        |
-| `dashboard.ingress.className`                  | Defines the ingress class name used.                                   | `""`                                                           |
-| `dashboard.ingress.tls`                        | Allows to use specific tls certificate.                                | `[]`                                                           |
-| `dashboard.ingress.annotations`                | Used for detailed configuration.                                       | `{}`                                                           |
-| `dashboard.ingress.host`                       | Defines the hostname and URL under which the dashboard gets            | `wazuh.example.com`                                            |
+| `dashboard.cred.existingSecret`                      | Name of the existingSecret                                                                                                                                                                          | `""`                                                           |
+| `dashboard.cred.password`                            | Value of the password for the kibanaserver user.                                                                                                                                                    | `kibanaserver`                                                 |
+| `dashboard.cred.username`                            | Value of the username                                                                                                                                                                               | `kibanaserver`                                                 |
+| `dashboard.cred.passwordHash`                        | Hash of the password                                                                                                                                                                                | `$2a$12$7NCZ.l9ntPhou5zNjZIU4uqXNNWMF7SyF6Y6mcjhHTB6Z1eQubHC.` |
+| `dashboard.basicAuth.enabled`                        | Enable basicAuth                                                                                                                                                                                    | `true`                                                         |
+| `dashboard.basicAuth.order`                          | Order for basicAuth                                                                                                                                                                                 | `4`                                                            |
+| `dashboard.basicAuth.challenge`                      | Challenge for basicAuth                                                                                                                                                                             | `true`                                                         |
+| `dashboard.server.extraConf`                         | Set extra config for Wazuh Dashboard                                                                                                                                                                | `{}`                                                           |
+| `dashboard.ingress.enabled`                          | Enable ingress record generation for dashboard.                                                                                                                                                     | `false`                                                        |
+| `dashboard.ingress.className`                        | Defines the ingress class name used.                                                                                                                                                                | `""`                                                           |
+| `dashboard.ingress.tls`                              | Allows to use specific tls certificate.                                                                                                                                                             | `[]`                                                           |
+| `dashboard.ingress.annotations`                      | Used for detailed configuration.                                                                                                                                                                    | `{}`                                                           |
+| `dashboard.ingress.host`                             | Defines the hostname and URL under which the dashboard gets                                                                                                                                         | `wazuh.example.com`                                            |
+| `dashboard.gateway.enabled`                          | Enable Gateway API resources (HTTPRoute + parent) for dashboard, as an alternative to dashboard.ingress.                                                                                            | `false`                                                        |
+| `dashboard.gateway.host`                             | Defines the hostname under which the dashboard is exposed through the Gateway.                                                                                                                      | `wazuh.example.com`                                            |
+| `dashboard.gateway.annotations`                      | Annotations to add on the ListenerSet.                                                                                                                                                              | `{}`                                                           |
+| `dashboard.gateway.parentRef.group`                  | Group of the parent Gateway reference.                                                                                                                                                              | `gateway.networking.k8s.io`                                    |
+| `dashboard.gateway.parentRef.kind`                   | Kind of the parent Gateway reference.                                                                                                                                                               | `Gateway`                                                      |
+| `dashboard.gateway.parentRef.name`                   | Name of the parent Gateway. Required when dashboard.gateway.enabled is true.                                                                                                                        | `""`                                                           |
+| `dashboard.gateway.parentRef.namespace`              | Namespace of the parent Gateway. Leave empty when the Gateway is in the same namespace.                                                                                                             | `""`                                                           |
+| `dashboard.gateway.listenerSet.enabled`              | Create a dedicated ListenerSet and attach the HTTPRoute to it. Disable to attach the HTTPRoute directly to the parent Gateway, for Gateways that do not allow ListenerSets (spec.allowedListeners). | `true`                                                         |
+| `dashboard.gateway.tls.enabled`                      | Terminate edge TLS (client to Gateway) on the listener for the dashboard hostname.                                                                                                                  | `false`                                                        |
+| `dashboard.gateway.tls.secretName`                   | Name of the Secret holding the edge TLS certificate. Defaults to "<fullname>-dashboard-letsencrypt" when tls.certificate.create is true.                                                            | `""`                                                           |
+| `dashboard.gateway.tls.certificate.create`           | Let the chart create a cert-manager Certificate for the edge TLS secret. Set to false to reuse an existing Secret referenced by tls.secretName.                                                     | `true`                                                         |
+| `dashboard.gateway.tls.issuerRef.name`               | Name of the cert-manager issuer used to sign the edge TLS certificate. Required when tls.certificate.create is true.                                                                                | `""`                                                           |
+| `dashboard.gateway.tls.issuerRef.kind`               | Kind of the issuer used for signing the edge TLS certificate (Issuer or ClusterIssuer).                                                                                                             | `ClusterIssuer`                                                |
+| `dashboard.gateway.tls.issuerRef.group`              | Group of the issuer used for signing the edge TLS certificate.                                                                                                                                      | `cert-manager.io`                                              |
+| `dashboard.gateway.backendTLS.caCertificateRef.name` | Name of an existing ConfigMap (key ca.crt) used by the Gateway to validate the dashboard backend TLS certificate. Required when dashboard.gateway.enabled and dashboard.enable_ssl are both true.   | `""`                                                           |
 
 ### wazuh configuration of the wazuh core component.
 
-| Name                                            | Description                                                                        | Value                                  |
-| ----------------------------------------------- | ---------------------------------------------------------------------------------- | -------------------------------------- |
-| `wazuh.enabled`                                 | enable the deployment of wazuh core component                                      | `true`                                 |
-| `wazuh.serviceAccount.create`                   | Create service account                                                             | `false`                                |
-| `wazuh.serviceAccount.annotations`              | Annotations for service account                                                    | `{}`                                   |
-| `wazuh.serviceAccount.name`                     | Name of the service account                                                        | `wazuh-manager`                        |
-| `wazuh.syslog_enable`                           | Enables the syslog of the wazuh instance.                                          | `true`                                 |
-| `wazuh.key`                                     | Defines the key of the wazuh cluster.                                              | `c98b62a9b6169ac5f67dae55ae4a9088`     |
-| `wazuh.images.repository`                       | name of the image used.                                                            | `wazuh/wazuh-manager`                  |
-| `wazuh.images.tag`                              | Tag of the image.                                                                  | `4.14.3`                               |
-| `wazuh.images.pullPolicy`                       | pullPolicy of the image.                                                           | `IfNotPresent`                         |
-| `wazuh.images.imagePullSecrets.enabled`         | Enable pulling image using secret.                                                 | `false`                                |
-| `wazuh.images.imagePullSecrets.secret`          | Map of secret names to authenticate.                                               | `{}`                                   |
-| `wazuh.loadBalancer.enabled`                    | Enable LoadBalancer service for external agent connections                         | `false`                                |
-| `wazuh.loadBalancer.annotations`                | Annotations for LoadBalancer service                                               | `{}`                                   |
-| `wazuh.service.annotations`                     | Annotations of the created service.                                                | `{}`                                   |
-| `wazuh.service.port`                            | Port for the http endpoint.                                                        | `1516`                                 |
-| `wazuh.nodeSelector`                            | nodeSelector                                                                       | `{}`                                   |
-| `wazuh.apiCred.existingSecret`                  | name of the existingSecret                                                         | `""`                                   |
-| `wazuh.apiCred.username`                        | name of the username.                                                              | `wazuh-wui`                            |
-| `wazuh.apiCred.password`                        | password of the user.                                                              | `MyS3cr37P450r.*-`                     |
-| `wazuh.authd.enabled`                           | enable password-based agent registration                                           | `true`                                 |
-| `wazuh.authd.existingSecret`                    | name of the existingSecret                                                         | `""`                                   |
-| `wazuh.authd.pass`                              | password of the authd.                                                             | `password`                             |
-| `wazuh.initContainer.image`                     | Image used by the update-index container                                           | `alpine`                               |
-| `wazuh.initContainer.resources.requests.cpu`    | Minimum CPU assigned to the pod.                                                   | `250m`                                 |
-| `wazuh.initContainer.resources.requests.memory` | Minimum memory assigned to the pod.                                                | `512Mi`                                |
-| `wazuh.initContainer.resources.limits.cpu`      | Maximum CPU used by the pod.                                                       | `1000m`                                |
-| `wazuh.initContainer.resources.limits.memory`   | Maximum memory used by the pod.                                                    | `1Gi`                                  |
-| `wazuh.extraInitContainers`                     | Parameters for the additional initContainers.                                      | `[]`                                   |
-| `wazuh.script`                                  | Override for script.sh. If empty, files/script.sh is used.                         | `""`                                   |
-| `wazuh.masterConf`                              | Override for master.conf. If empty, the generated ossec config is used.            | `""`                                   |
-| `wazuh.workerConf`                              | Override for worker.conf. If empty, the generated ossec config is used.            | `""`                                   |
-| `wazuh.localDecoder`                            | Override for local_decoder.xml. If empty, files/local_decoder.xml is used.         | `""`                                   |
-| `wazuh.localRules`                              | Override for local_rules.xml. If empty, files/local_rules.xml is used.             | `""`                                   |
-| `wazuh.internalOptions`                         | Override for internal_options.conf. If empty, files/internal_options.conf is used. | `""`                                   |
-| `wazuh.master.enabled`                          | Enable the master                                                                  | `true`                                 |
-| `wazuh.master.annotations`                      | additional annotations set on statefulset.                                         | `{}`                                   |
-| `wazuh.master.extraPodLabels`                   | Extra labels to add to the master pods.                                            | `{}`                                   |
-| `wazuh.master.resources.requests.cpu`           | Minimum CPU assigned to the pod.                                                   | `500m`                                 |
-| `wazuh.master.resources.requests.memory`        | Minimum memory assigned to the pod.                                                | `512Mi`                                |
-| `wazuh.master.resources.limits.cpu`             | Maximum CPU used by the pod.                                                       | `1000m`                                |
-| `wazuh.master.resources.limits.memory`          | Maximum memory used by the pod.                                                    | `1Gi`                                  |
-| `wazuh.master.tolerations`                      | Tolerations for master pods                                                        | `[]`                                   |
-| `wazuh.master.affinity`                         | Affinity rules for master pods                                                     | `{}`                                   |
-| `wazuh.master.dnsPolicy`                        | DNS policy for the pod                                                             | `""`                                   |
-| `wazuh.master.dnsConfig`                        | DNS configuration for the pod                                                      | `{}`                                   |
-| `wazuh.master.service.type`                     | Type of the created service.                                                       | `ClusterIP`                            |
-| `wazuh.master.service.annotations`              | Annotations of the created service.                                                | `{}`                                   |
-| `wazuh.master.configVolume.defaultMode`         | defaultMode for the manager config volume. If not set, defaults to 0500.           | `0755`                                 |
-| `wazuh.master.livenessProbe`                    | Parameter to configure the livenessProbe.                                          | `{}`                                   |
-| `wazuh.master.readinessProbe`                   | Parameter to configure the readinessProbe.                                         | `{}`                                   |
-| `wazuh.master.additionalEnv`                    | Possibility to define additional env vars in the pod.                              | `[]`                                   |
-| `wazuh.master.additionalVolumes`                | Possibility to define additional volumes in the pod.                               | `[]`                                   |
-| `wazuh.master.additionalVolumeMounts`           | Possibility to define additional volumeMounts in the pod.                          | `[]`                                   |
-| `wazuh.master.securityContext.capabilities.add` | Additional capabilities.                                                           | `["SYS_CHROOT"]`                       |
-| `wazuh.master.networkPolicy.enabled`            | Specifies whether a NetworkPolicy should be created.                               | `true`                                 |
-| `wazuh.master.networkPolicy.extraIngresses`     | specify additional ingress rules                                                   | `[]`                                   |
-| `wazuh.master.networkPolicy.extraEgresses`      | specify additional egress rules                                                    | `[]`                                   |
-| `wazuh.master.pvc.extraLabels`                  | Add addtional labels to the PersistentVolumeClaim metadata                         | `{}`                                   |
-| `wazuh.master.storageSize`                      | Defines the size of the pvc used by the statefulset.                               | `50Gi`                                 |
-| `wazuh.master.storageClass`                     | Defines the storageClass of the pvc used by the statefulset.                       | `nil`                                  |
-| `wazuh.master.conf`                             | Config for the wazuh master, do not change!                                        | `{{ include "wazuh.master.conf" . }}
+| Name                                               | Description                                                                            | Value                                  |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------- | -------------------------------------- |
+| `wazuh.enabled`                                    | enable the deployment of wazuh core component                                          | `true`                                 |
+| `wazuh.serviceAccount.create`                      | Create service account                                                                 | `false`                                |
+| `wazuh.serviceAccount.annotations`                 | Annotations for service account                                                        | `{}`                                   |
+| `wazuh.serviceAccount.name`                        | Name of the service account                                                            | `wazuh-manager`                        |
+| `wazuh.syslog_enable`                              | Enables the syslog of the wazuh instance.                                              | `true`                                 |
+| `wazuh.archives.enabled`                           | Index every event, not just alerts.                                                    | `false`                                |
+| `wazuh.key`                                        | Defines the key of the wazuh cluster.                                                  | `c98b62a9b6169ac5f67dae55ae4a9088`     |
+| `wazuh.images.repository`                          | name of the image used.                                                                | `wazuh/wazuh-manager`                  |
+| `wazuh.images.tag`                                 | Tag of the image.                                                                      | `4.14.3`                               |
+| `wazuh.images.pullPolicy`                          | pullPolicy of the image.                                                               | `IfNotPresent`                         |
+| `wazuh.images.imagePullSecrets.enabled`            | Enable pulling image using secret.                                                     | `false`                                |
+| `wazuh.images.imagePullSecrets.secret`             | Map of secret names to authenticate.                                                   | `{}`                                   |
+| `wazuh.loadBalancer.enabled`                       | Enable LoadBalancer service for external agent connections                             | `false`                                |
+| `wazuh.loadBalancer.annotations`                   | Annotations for LoadBalancer service                                                   | `{}`                                   |
+| `wazuh.loadBalancer.ports`                         | Inline array of port names to expose; empty means all ports are included               | `["registration","agents-events"]`     |
+| `wazuh.loadBalancer.loadBalancerSourceRanges`      | List of CIDR ranges allowed to reach the LoadBalancer; rendered whenever non-empty     | `[]`                                   |
+| `wazuh.loadBalancer.externalTrafficPolicy`         | External traffic policy for the LoadBalancer (e.g. Local or Cluster); omitted if empty | `""`                                   |
+| `wazuh.loadBalancer.internalTrafficPolicy`         | Internal traffic policy for the LoadBalancer (e.g. Cluster or Local); omitted if empty | `""`                                   |
+| `wazuh.loadBalancer.allocateLoadBalancerNodePorts` | Whether to allocate node ports for the LoadBalancer; omitted if null                   | `nil`                                  |
+| `wazuh.service.annotations`                        | Annotations of the created service.                                                    | `{}`                                   |
+| `wazuh.service.port`                               | Port for the http endpoint.                                                            | `1516`                                 |
+| `wazuh.nodeSelector`                               | nodeSelector                                                                           | `{}`                                   |
+| `wazuh.apiCred.existingSecret`                     | name of the existingSecret                                                             | `""`                                   |
+| `wazuh.apiCred.username`                           | name of the username.                                                                  | `wazuh-wui`                            |
+| `wazuh.apiCred.password`                           | password of the user.                                                                  | `MyS3cr37P450r.*-`                     |
+| `wazuh.authd.enabled`                              | enable password-based agent registration                                               | `true`                                 |
+| `wazuh.authd.existingSecret`                       | name of the existingSecret                                                             | `""`                                   |
+| `wazuh.authd.pass`                                 | password of the authd.                                                                 | `password`                             |
+| `wazuh.initContainer.image`                        | Image used by the update-index container                                               | `alpine`                               |
+| `wazuh.initContainer.resources.requests.cpu`       | Minimum CPU assigned to the pod.                                                       | `250m`                                 |
+| `wazuh.initContainer.resources.requests.memory`    | Minimum memory assigned to the pod.                                                    | `512Mi`                                |
+| `wazuh.initContainer.resources.limits.cpu`         | Maximum CPU used by the pod.                                                           | `1000m`                                |
+| `wazuh.initContainer.resources.limits.memory`      | Maximum memory used by the pod.                                                        | `1Gi`                                  |
+| `wazuh.extraInitContainers`                        | Parameters for the additional initContainers.                                          | `[]`                                   |
+| `wazuh.script`                                     | Override for script.sh. If empty, files/script.sh is used.                             | `""`                                   |
+| `wazuh.masterConf`                                 | Override for master.conf. If empty, the generated ossec config is used.                | `""`                                   |
+| `wazuh.workerConf`                                 | Override for worker.conf. If empty, the generated ossec config is used.                | `""`                                   |
+| `wazuh.localDecoder`                               | Override for local_decoder.xml. If empty, files/local_decoder.xml is used.             | `""`                                   |
+| `wazuh.localRules`                                 | Override for local_rules.xml. If empty, files/local_rules.xml is used.                 | `""`                                   |
+| `wazuh.internalOptions`                            | Override for internal_options.conf. If empty, files/internal_options.conf is used.     | `""`                                   |
+| `wazuh.filebeat.config`                            | Override for filebeat.yml. If empty, the generated config is used.                     | `""`                                   |
+| `wazuh.master.enabled`                             | Enable the master                                                                      | `true`                                 |
+| `wazuh.master.annotations`                         | additional annotations set on statefulset.                                             | `{}`                                   |
+| `wazuh.master.extraPodLabels`                      | Extra labels to add to the master pods.                                                | `{}`                                   |
+| `wazuh.master.resources.requests.cpu`              | Minimum CPU assigned to the pod.                                                       | `500m`                                 |
+| `wazuh.master.resources.requests.memory`           | Minimum memory assigned to the pod.                                                    | `512Mi`                                |
+| `wazuh.master.resources.limits.cpu`                | Maximum CPU used by the pod.                                                           | `1000m`                                |
+| `wazuh.master.resources.limits.memory`             | Maximum memory used by the pod.                                                        | `1Gi`                                  |
+| `wazuh.master.tolerations`                         | Tolerations for master pods                                                            | `[]`                                   |
+| `wazuh.master.affinity`                            | Affinity rules for master pods                                                         | `{}`                                   |
+| `wazuh.master.dnsPolicy`                           | DNS policy for the pod                                                                 | `""`                                   |
+| `wazuh.master.dnsConfig`                           | DNS configuration for the pod                                                          | `{}`                                   |
+| `wazuh.master.service.type`                        | Type of the created service.                                                           | `ClusterIP`                            |
+| `wazuh.master.service.annotations`                 | Annotations of the created service.                                                    | `{}`                                   |
+| `wazuh.master.configVolume.defaultMode`            | defaultMode for the manager config volume. If not set, defaults to 0500.               | `0755`                                 |
+| `wazuh.master.livenessProbe`                       | Parameter to configure the livenessProbe.                                              | `{}`                                   |
+| `wazuh.master.readinessProbe`                      | Parameter to configure the readinessProbe.                                             | `{}`                                   |
+| `wazuh.master.additionalEnv`                       | Possibility to define additional env vars in the pod.                                  | `[]`                                   |
+| `wazuh.master.additionalVolumes`                   | Possibility to define additional volumes in the pod.                                   | `[]`                                   |
+| `wazuh.master.additionalVolumeMounts`              | Possibility to define additional volumeMounts in the pod.                              | `[]`                                   |
+| `wazuh.master.securityContext.capabilities.add`    | Additional capabilities.                                                               | `["SYS_CHROOT"]`                       |
+| `wazuh.master.networkPolicy.enabled`               | Specifies whether a NetworkPolicy should be created.                                   | `true`                                 |
+| `wazuh.master.networkPolicy.extraIngresses`        | specify additional ingress rules                                                       | `[]`                                   |
+| `wazuh.master.networkPolicy.extraEgresses`         | specify additional egress rules                                                        | `[]`                                   |
+| `wazuh.master.pvc.extraLabels`                     | Add addtional labels to the PersistentVolumeClaim metadata                             | `{}`                                   |
+| `wazuh.master.storageSize`                         | Defines the size of the pvc used by the statefulset.                                   | `50Gi`                                 |
+| `wazuh.master.storageClass`                        | Defines the storageClass of the pvc used by the statefulset.                           | `nil`                                  |
+| `wazuh.master.conf`                                | Config for the wazuh master, do not change!                                            | `{{ include "wazuh.master.conf" . }}
 ` |
-| `wazuh.master.extraConf`                        | Gets appended to the wazuh.master.conf.                                            | `""`                                   |
-| `wazuh.worker.enabled`                          | Enable the worker                                                                  | `true`                                 |
-| `wazuh.worker.replicas`                         | number of replicas used in statefulset.                                            | `2`                                    |
-| `wazuh.worker.annotations`                      | additional annotations set on deployment.                                          | `{}`                                   |
-| `wazuh.worker.extraPodLabels`                   | Extra labels to add to the worker pods.                                            | `{}`                                   |
-| `wazuh.worker.resources.requests.cpu`           | Minimum CPU assigned to the pod.                                                   | `500m`                                 |
-| `wazuh.worker.resources.requests.memory`        | Minimum memory assigned to the pod.                                                | `512Mi`                                |
-| `wazuh.worker.resources.limits.cpu`             | Maximum CPU used by the pod.                                                       | `1000m`                                |
-| `wazuh.worker.resources.limits.memory`          | Maximum memory used by the pod.                                                    | `1Gi`                                  |
-| `wazuh.worker.tolerations`                      | Tolerations for worker pods                                                        | `[]`                                   |
-| `wazuh.worker.affinity`                         | Affinity rules for worker pods                                                     | `{}`                                   |
-| `wazuh.worker.dnsPolicy`                        | DNS policy for the pod                                                             | `""`                                   |
-| `wazuh.worker.dnsConfig`                        | DNS configuration for the pod                                                      | `{}`                                   |
-| `wazuh.worker.configVolume.defaultMode`         | defaultMode for the worker config volume. If not set, defaults to 0500.            | `0755`                                 |
-| `wazuh.worker.podAntiAffinity`                  | Pod anti-affinity setting                                                          | `soft`                                 |
-| `wazuh.worker.podAntiAffinityTopologyKey`       | Topology key for anti-affinity                                                     | `kubernetes.io/hostname`               |
-| `wazuh.worker.service.type`                     | Type of the created service.                                                       | `ClusterIP`                            |
-| `wazuh.worker.service.annotations`              | Annotations of the created service.                                                | `{}`                                   |
-| `wazuh.worker.pdb.enabled`                      | Enables pdb for worker.                                                            | `true`                                 |
-| `wazuh.worker.livenessProbe`                    | Parameter to configure the livenessProbe.                                          | `{}`                                   |
-| `wazuh.worker.readinessProbe`                   | Parameter to configure the readinessProbe.                                         | `{}`                                   |
-| `wazuh.worker.additionalEnv`                    | Possibility to define additional env vars in the pod.                              | `[]`                                   |
-| `wazuh.worker.additionalVolumes`                | Possibility to define additional volumes vars in the pod.                          | `[]`                                   |
-| `wazuh.worker.additionalVolumeMounts`           | Possibility to define additional volumeMounts vars in the pod.                     | `[]`                                   |
-| `wazuh.worker.securityContext.capabilities.add` | Additional capabilities.                                                           | `["SYS_CHROOT"]`                       |
-| `wazuh.worker.networkPolicy.enabled`            | Specifies whether a NetworkPolicy should be created.                               | `true`                                 |
-| `wazuh.worker.networkPolicy.extraIngresses`     | specify additional ingress rules                                                   | `[]`                                   |
-| `wazuh.worker.networkPolicy.extraEgresses`      | specify additional egress rules                                                    | `[]`                                   |
-| `wazuh.worker.pvc.extraLabels`                  | Add addtional labels to the PersistentVolumeClaim metadata                         | `{}`                                   |
-| `wazuh.worker.storageSize`                      | Defines the size of the pvc used by the statefulset.                               | `50Gi`                                 |
-| `wazuh.worker.storageClass`                     | Defines the storageClass of the pvc used by the statefulset.                       | `nil`                                  |
-| `wazuh.worker.conf`                             | Config for the wazuh worker, do not change!                                        | `{{ include "wazuh.worker.conf" . }}
+| `wazuh.master.extraConf`                           | Gets appended to the wazuh.master.conf.                                                | `""`                                   |
+| `wazuh.worker.enabled`                             | Enable the worker                                                                      | `true`                                 |
+| `wazuh.worker.replicas`                            | number of replicas used in statefulset.                                                | `2`                                    |
+| `wazuh.worker.annotations`                         | additional annotations set on deployment.                                              | `{}`                                   |
+| `wazuh.worker.extraPodLabels`                      | Extra labels to add to the worker pods.                                                | `{}`                                   |
+| `wazuh.worker.resources.requests.cpu`              | Minimum CPU assigned to the pod.                                                       | `500m`                                 |
+| `wazuh.worker.resources.requests.memory`           | Minimum memory assigned to the pod.                                                    | `512Mi`                                |
+| `wazuh.worker.resources.limits.cpu`                | Maximum CPU used by the pod.                                                           | `1000m`                                |
+| `wazuh.worker.resources.limits.memory`             | Maximum memory used by the pod.                                                        | `1Gi`                                  |
+| `wazuh.worker.tolerations`                         | Tolerations for worker pods                                                            | `[]`                                   |
+| `wazuh.worker.affinity`                            | Affinity rules for worker pods                                                         | `{}`                                   |
+| `wazuh.worker.dnsPolicy`                           | DNS policy for the pod                                                                 | `""`                                   |
+| `wazuh.worker.dnsConfig`                           | DNS configuration for the pod                                                          | `{}`                                   |
+| `wazuh.worker.configVolume.defaultMode`            | defaultMode for the worker config volume. If not set, defaults to 0500.                | `0755`                                 |
+| `wazuh.worker.podAntiAffinity`                     | Pod anti-affinity setting                                                              | `soft`                                 |
+| `wazuh.worker.podAntiAffinityTopologyKey`          | Topology key for anti-affinity                                                         | `kubernetes.io/hostname`               |
+| `wazuh.worker.service.type`                        | Type of the created service.                                                           | `ClusterIP`                            |
+| `wazuh.worker.service.annotations`                 | Annotations of the created service.                                                    | `{}`                                   |
+| `wazuh.worker.pdb.enabled`                         | Enables pdb for worker.                                                                | `true`                                 |
+| `wazuh.worker.livenessProbe`                       | Parameter to configure the livenessProbe.                                              | `{}`                                   |
+| `wazuh.worker.readinessProbe`                      | Parameter to configure the readinessProbe.                                             | `{}`                                   |
+| `wazuh.worker.additionalEnv`                       | Possibility to define additional env vars in the pod.                                  | `[]`                                   |
+| `wazuh.worker.additionalVolumes`                   | Possibility to define additional volumes vars in the pod.                              | `[]`                                   |
+| `wazuh.worker.additionalVolumeMounts`              | Possibility to define additional volumeMounts vars in the pod.                         | `[]`                                   |
+| `wazuh.worker.securityContext.capabilities.add`    | Additional capabilities.                                                               | `["SYS_CHROOT"]`                       |
+| `wazuh.worker.networkPolicy.enabled`               | Specifies whether a NetworkPolicy should be created.                                   | `true`                                 |
+| `wazuh.worker.networkPolicy.extraIngresses`        | specify additional ingress rules                                                       | `[]`                                   |
+| `wazuh.worker.networkPolicy.extraEgresses`         | specify additional egress rules                                                        | `[]`                                   |
+| `wazuh.worker.pvc.extraLabels`                     | Add addtional labels to the PersistentVolumeClaim metadata                             | `{}`                                   |
+| `wazuh.worker.storageSize`                         | Defines the size of the pvc used by the statefulset.                                   | `50Gi`                                 |
+| `wazuh.worker.storageClass`                        | Defines the storageClass of the pvc used by the statefulset.                           | `nil`                                  |
+| `wazuh.worker.conf`                                | Config for the wazuh worker, do not change!                                            | `{{ include "wazuh.worker.conf" . }}
 ` |
-| `wazuh.worker.extraConf`                        | Gets appended to the wazuh.worker.conf.                                            | `""`                                   |
-| `agent.enabled`                                 | Enable the agent.                                                                  | `true`                                 |
-| `agent.namePrefix`                              | Prefix for the agent name.                                                         | `""`                                   |
-| `agent.serviceAccount.create`                   | defines wazuh agent serviceAccount.                                                | `false`                                |
-| `agent.serviceAccount.annotations`              | Annotations for the service account                                                | `{}`                                   |
-| `agent.serviceAccount.name`                     | Name of the service account                                                        | `wazuh-agent`                          |
-| `agent.debug.enabled`                           | Enable debug mode for the agent.                                                   | `false`                                |
-| `agent.debug.level`                             | Run the agent processes in debug mode.                                             | `1`                                    |
-| `agent.debug.modules`                           | List of agent processes for which debugging is enabled.                            | `["agent","wazuh_modules"]`            |
-| `agent.service.port`                            | Port for the service.                                                              | `5000`                                 |
-| `agent.service.type`                            | Type of the created service.                                                       | `ClusterIP`                            |
-| `agent.service.annotations`                     | Annotations of the created service.                                                | `{}`                                   |
-| `agent.labels`                                  | Extra labels for the agent.                                                        | `{}`                                   |
-| `agent.annotations`                             | Extra annotations for the agent.                                                   | `{}`                                   |
-| `agent.podAnnotations`                          | Extra annotations for the agent.                                                   | `{}`                                   |
-| `agent.extraPodLabels`                          | Extra labels to add to the agent pods.                                             | `{}`                                   |
-| `agent.images.repository`                       | Repository                                                                         | `kinseii/wazuh-agent`                  |
-| `agent.images.tag`                              | Tag                                                                                | `4.14.1`                               |
-| `agent.images.pullPolicy`                       | Pull Policy                                                                        | `IfNotPresent`                         |
-| `agent.podSecurityContext`                      | Additional capabilities.                                                           | `{}`                                   |
-| `agent.nodeSelector`                            | nodeSelector                                                                       | `{}`                                   |
-| `agent.affinity`                                | affinity                                                                           | `{}`                                   |
-| `agent.tolerations`                             | tolerations                                                                        | `[]`                                   |
-| `agent.dnsPolicy`                               | DNS policy for the pod.                                                            | `""`                                   |
-| `agent.dnsConfig`                               | DNS configuration for the pod.                                                     | `{}`                                   |
+| `wazuh.worker.extraConf`                           | Gets appended to the wazuh.worker.conf.                                                | `""`                                   |
+| `agent.enabled`                                    | Enable the agent.                                                                      | `true`                                 |
+| `agent.namePrefix`                                 | Prefix for the agent name.                                                             | `""`                                   |
+| `agent.serviceAccount.create`                      | defines wazuh agent serviceAccount.                                                    | `false`                                |
+| `agent.serviceAccount.annotations`                 | Annotations for the service account                                                    | `{}`                                   |
+| `agent.serviceAccount.name`                        | Name of the service account                                                            | `wazuh-agent`                          |
+| `agent.debug.enabled`                              | Enable debug mode for the agent.                                                       | `false`                                |
+| `agent.debug.level`                                | Run the agent processes in debug mode.                                                 | `1`                                    |
+| `agent.debug.modules`                              | List of agent processes for which debugging is enabled.                                | `["agent","wazuh_modules"]`            |
+| `agent.service.port`                               | Port for the service.                                                                  | `5000`                                 |
+| `agent.service.type`                               | Type of the created service.                                                           | `ClusterIP`                            |
+| `agent.service.annotations`                        | Annotations of the created service.                                                    | `{}`                                   |
+| `agent.labels`                                     | Extra labels for the agent.                                                            | `{}`                                   |
+| `agent.annotations`                                | Extra annotations for the agent.                                                       | `{}`                                   |
+| `agent.podAnnotations`                             | Extra annotations for the agent.                                                       | `{}`                                   |
+| `agent.extraPodLabels`                             | Extra labels to add to the agent pods.                                                 | `{}`                                   |
+| `agent.images.repository`                          | Repository                                                                             | `kinseii/wazuh-agent`                  |
+| `agent.images.tag`                                 | Tag                                                                                    | `4.14.1`                               |
+| `agent.images.pullPolicy`                          | Pull Policy                                                                            | `IfNotPresent`                         |
+| `agent.podSecurityContext`                         | Additional capabilities.                                                               | `{}`                                   |
+| `agent.nodeSelector`                               | nodeSelector                                                                           | `{}`                                   |
+| `agent.affinity`                                   | affinity                                                                               | `{}`                                   |
+| `agent.tolerations`                                | tolerations                                                                            | `[]`                                   |
+| `agent.dnsPolicy`                                  | DNS policy for the pod.                                                                | `""`                                   |
+| `agent.dnsConfig`                                  | DNS configuration for the pod.                                                         | `{}`                                   |
