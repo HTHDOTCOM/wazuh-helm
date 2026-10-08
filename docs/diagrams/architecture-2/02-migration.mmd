@@ -1,0 +1,8 @@
+flowchart TB
+    Base[Record Wazuh 4 baseline] --> Fresh[Separate Wazuh 5 test release<br/>Fresh PVCs]
+    Fresh --> Manager[Update manager paths<br/>Configuration and probes]
+    Manager --> State[Credentials, TLS<br/>and persistent state]
+    State --> Agent[HTTPS 1517 routing<br/>Token enrollment and agent image]
+    Agent --> Live[Verify events, APIs, dashboard<br/>and pod recreation]
+    Live --> Operations[Test rotation, backups<br/>migration and rollback]
+    Operations --> Review[Review compatibility results<br/>before upgrading existing data]

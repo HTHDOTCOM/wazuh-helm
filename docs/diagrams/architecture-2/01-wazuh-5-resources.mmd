@@ -1,0 +1,7 @@
+flowchart LR
+    Cred[Component credential file] --> Init[First-start initialization]
+    Init --> Store[Account database<br/>or keystore on persistent storage]
+    Listener[Agent-listener certificate<br/>CA trust and SANs] --> Manager[Manager pods]
+    Connector[Indexer client certificate<br/>and CA trust] --> Manager
+    Manager --- Data[Manager data volume<br/>Detection content and state]
+    Dashboard[Dashboard pod] --- Config[Persistent config volume<br/>Keystore and encryption key]

@@ -10,6 +10,8 @@ See [architecture and deployment flows](docs/architecture.md) for diagrams of
 this chart, event processing, certificates, storage and the planned Wazuh 5 changes.
 A [printable PDF](docs/architecture-print.pdf) and
 [standalone HTML](docs/architecture-print.html) are also available.
+For a Wazuh 5-first introduction and comparison with our current deployment, see
+[architecture 2](docs/architecture-2.md).
 
 ### Generating Certificates
 

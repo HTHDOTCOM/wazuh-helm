@@ -8,13 +8,17 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const documentName = process.argv[2] || 'architecture';
+if (!['architecture', 'architecture-2'].includes(documentName) || process.argv.length > 3) {
+  throw new Error('Usage: node scripts/render-architecture.mjs [architecture|architecture-2]');
+}
 const modules = process.env.DOCS_NODE_MODULES;
 if (!modules || !path.isAbsolute(modules)) {
   throw new Error('Set DOCS_NODE_MODULES to the absolute temporary node_modules path.');
 }
 const { default: puppeteer } = await import(pathToFileURL(path.join(modules, 'puppeteer-core/lib/esm/puppeteer/puppeteer-core.js')));
-const sources = path.join(root, 'docs/diagrams/architecture');
-const assets = path.join(root, 'docs/assets/architecture');
+const sources = path.join(root, 'docs/diagrams', documentName);
+const assets = path.join(root, 'docs/assets', documentName);
 await fs.mkdir(assets, { recursive: true });
 
 const server = http.createServer(async (request, response) => {
@@ -95,10 +99,10 @@ try {
     console.log(`Rendered ${filename}`);
   }
 
-  const result = spawnSync('pandoc', ['--from=gfm', '--to=html5', 'docs/architecture.md'], { cwd: root, encoding: 'utf8' });
+  const result = spawnSync('pandoc', ['--from=gfm', '--to=html5', `docs/${documentName}.md`], { cwd: root, encoding: 'utf8' });
   if (result.status !== 0) throw new Error(result.stderr || 'Pandoc failed');
   let content = result.stdout;
-  for (const image of [...content.matchAll(/<img src="(assets\/architecture\/[^"<>]+\.svg)"[^>]*>/g)]) {
+  for (const image of [...content.matchAll(/<img src="(assets\/architecture(?:-2)?\/[^"<>]+\.svg)"[^>]*>/g)]) {
     const svg = await fs.readFile(path.join(root, 'docs', image[1]), 'utf8');
     const embedded = 'data:image/svg+xml;base64,' + Buffer.from(svg).toString('base64');
     content = content.replace(image[0], image[0].replace(image[1], embedded));
@@ -109,20 +113,23 @@ try {
     return `href="https://github.com/HTHDOTCOM/wazuh-helm/blob/main/${relative}"`;
   });
   const css = await fs.readFile(path.join(root, 'docs/architecture-print.css'), 'utf8');
-  const html = `<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light"><title>Wazuh Helm architecture and Wazuh 5 changes</title><style>${css}</style></head><body><main>${content}</main></body></html>\n`;
-  await fs.writeFile(path.join(root, 'docs/architecture-print.html'), html);
+  // Keep the short status and references sections together without forced pages.
+  const documentStyle = documentName === 'architecture-2' ? '\n@media print { main > h2:nth-last-of-type(-n+2) { break-before: auto; margin-top: 8mm; } }' : '';
+  const title = documentName === 'architecture-2' ? 'Wazuh 5 architecture and current deployment comparison' : 'Wazuh Helm architecture and Wazuh 5 changes';
+  const html = `<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light"><title>${title}</title><style>${css}${documentStyle}</style></head><body><main>${content}</main></body></html>\n`;
+  await fs.writeFile(path.join(root, `docs/${documentName}-print.html`), html);
   const printPage = await browser.newPage();
   await printPage.setContent(html, { waitUntil: 'load' });
   await printPage.evaluate(() => document.fonts.ready);
   await printPage.evaluate(() => Promise.all([...document.images].map(image => image.decode())));
   await printPage.pdf({
-    path: path.join(root, 'docs/architecture-print.pdf'),
+    path: path.join(root, `docs/${documentName}-print.pdf`),
     preferCSSPageSize: true, printBackground: true,
     displayHeaderFooter: true,
     headerTemplate: '<span></span>',
     footerTemplate: '<div style="font:9px Arial;width:100%;text-align:center;color:#475569">Wazuh Helm architecture · <span class="pageNumber"></span> / <span class="totalPages"></span></div>',
   });
-  console.log('Built standalone HTML and A4 PDF');
+  console.log(`Built ${documentName}: standalone HTML and A4 PDF`);
 } finally {
   if (browser) await browser.close();
   await new Promise(resolve => server.close(resolve));

@@ -6,6 +6,9 @@ browser. The HTML embeds every diagram and its styles, so it works offline.
 Both use white backgrounds, dark text and vector diagrams. Browser print
 settings should use A4 paper, 100% scale and the document's default margins.
 
+The Wazuh 5-first comparison is available as [architecture 2](architecture-2.md),
+its [A4 PDF](architecture-2-print.pdf) and [standalone HTML](architecture-2-print.html).
+
 The [Markdown document](architecture.md) displays the same generated SVG images,
 which keep a white background in GitHub's dark theme. The runtime architecture
 is split into traffic and supporting-resource diagrams to keep it legible.
@@ -33,6 +36,16 @@ Adjust the checkout and Chromium paths for another machine. Chromium runs
 headlessly with its sandbox disabled for the Codex container; render only these
 trusted repository sources. The module server listens on loopback and shuts
 down when rendering finishes. Nothing is fetched from a CDN while rendering.
+
+To rebuild architecture 2 with the same dependencies, run:
+
+```bash
+DOCS_NODE_MODULES="$docs_tools/node_modules" \
+  DOCS_CHROMIUM=/usr/bin/chromium node scripts/render-architecture.mjs architecture-2
+```
+
+Architecture 2 reuses some generated diagrams from the original document;
+rebuild the original first if you changed their Mermaid sources.
 
 Review the generated PDF for readable labels, unclipped diagrams and sensible
 page breaks before publishing. The PDF covers the whole architecture document,
