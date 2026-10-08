@@ -45,6 +45,10 @@ Edge TLS (client to Gateway) and backend TLS (Gateway to the dashboard Service) 
 
 ### Contributing
 
+For local deployment and functional checks, see [Kind testing](docs/kind-testing.md).
+The [Wazuh 5 compatibility checklist](docs/wazuh-5-testing.md) tracks the remaining
+work for the release candidate; version 5 support is not implemented yet.
+
 This fork welcomes contributions and is open to transitioning into the official Wazuh project repository. Contributions are encouraged and appreciated.
 
 ## Values

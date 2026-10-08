@@ -4,15 +4,19 @@
 #
 # Usage: charts/wazuh/tests/render_test.sh
 # Requires: helm on PATH. No cluster access needed (pure `helm template`).
-# Fetches the chart's dependencies (cert-manager) on every run, so it works
-# from a clean checkout without a manual `helm dependency build` step.
+# Fetches the chart's dependencies (cert-manager) by default. For offline runs
+# with dependencies already installed, use SKIP_DEPENDENCY_BUILD=1.
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CHART_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 RELEASE=test
 
-helm dependency build "$CHART_DIR" >/dev/null
+if [[ "${SKIP_DEPENDENCY_BUILD:-0}" != "1" ]]; then
+  helm dependency build "$CHART_DIR" >/dev/null || exit 1
+fi
+# Fail before assertions if the chart or its installed dependencies are broken.
+helm lint "$CHART_DIR" --strict >/dev/null || exit 1
 
 pass=0
 fail=0
