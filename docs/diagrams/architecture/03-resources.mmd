@@ -1,0 +1,10 @@
+flowchart LR
+    Config[ConfigMaps and<br/>credential Secrets]
+    TLS[TLS certificate Secrets]
+    Config --> Apps[Manager, indexer and<br/>dashboard pods]
+    TLS --> Apps
+    ManagerPVC[Manager PVC per pod] --- Managers[Master and workers]
+    IndexerPVC[Indexer PVC per pod] --- Indexers[Indexer replicas]
+    Managers --- Cluster[Headless manager Service<br/>Cluster channel: 1516]
+    Indexers --- Transport[Headless indexer Service<br/>Transport channel: 9300]
+    Hook[Security bootstrap hook Job] -->|Configure security: 9200| Indexers

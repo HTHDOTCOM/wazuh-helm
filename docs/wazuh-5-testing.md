@@ -4,6 +4,8 @@ The initial compatibility investigation started on `feature/wazuh-5` from main c
 `1382a8987e995656b86ac5d4562c60cb9ed37c91` (chart 2.0.7).
 The initial compatibility target is **5.0.0-rc1**, not a stable release.
 The chart still defaults to Wazuh 4.14.3; Wazuh 5 support is not implemented yet.
+See the [architecture and Wazuh 5 changes](architecture.md#8-wazuh-5-upstream-changes-and-remaining-chart-work)
+for the updated comparison, or use the [printable PDF](architecture-print.pdf).
 
 ## Baseline
 
@@ -35,7 +37,9 @@ Implement and test the following before deploying this chart with version 5 tags
   carrying forward the Wazuh 4 Filebeat override and mounts.
 - Credentials: mount per-component Kubernetes Secrets as
   `/run/secrets/wazuh-credentials`, matching upstream credential names and
-  first-start behavior. Do not commit generated passwords.
+  first-start behavior. Persist initialized databases/keystores; changing a
+  Secret alone does not rotate stored passwords. Review indexer/dashboard root
+  initialization and later service-user behavior. Do not commit generated passwords.
 - Certificates: provide the manager's indexer connector client certificate
   and remoted HTTPS server certificate with correct SANs and trust chains.
 - Services and network policies: expose agent HTTPS communication and
@@ -43,8 +47,14 @@ Implement and test the following before deploying this chart with version 5 tags
   decision; upstream RC examples also retain 1514/1515 in some configurations.
 - Agent deployment: choose and verify a compatible Wazuh 5 agent image;
   changing the tag of the current third-party Wazuh 4 agent is insufficient.
+  Provision API-issued enrollment tokens, validate certificate SANs and CA trust,
+  and persist agent identity so recreating a pod does not enroll a new agent.
 - Indexer and dashboard: compare paths, secrets, probes, startup behavior,
   security bootstrap, and persisted data with upstream RC examples.
+- Detection content: persist `/var/wazuh-manager/data` and preserve the image's
+  refresh rules for packaged schema, enrichment and timezone content.
+- Dashboard keystore: persist the configuration directory so credentials and
+  the AI assistant encryption key survive pod recreation and image upgrades.
 
 ## Dedicated test cluster
 
@@ -61,9 +71,12 @@ Acceptance checks after deployment:
    certificate, credential, or permission failures.
 2. Authenticated indexer health and manager API requests succeed using verified
    TLS; dashboard authentication and its manager connection succeed.
-3. A Wazuh 5 agent enrolls over 1517 and reaches connected status.
+3. A Wazuh 5 agent enrolls with a valid token over verified HTTPS on 1517 and
+   reaches connected status; expired/revoked tokens are rejected.
 4. A representative agent event becomes an indexed alert visible in the dashboard.
-5. A pod restart preserves credentials and data and recovers without manual edits.
+5. Pod recreation preserves credentials, agent identity, detection content and
+   the dashboard keystore, and recovers without manual edits. Test credential
+   rotation separately from updating the Kubernetes Secret.
 6. Master/worker clustering, archives, external indexer and Gateway/SSO behavior
    are tested as those configurations are implemented.
 

@@ -8,6 +8,8 @@ Wazuh is a centralized Security Information and Event Management (SIEM) platform
 
 See [architecture and deployment flows](docs/architecture.md) for diagrams of
 this chart, event processing, certificates, storage and the planned Wazuh 5 changes.
+A [printable PDF](docs/architecture-print.pdf) and
+[standalone HTML](docs/architecture-print.html) are also available.
 
 ### Generating Certificates
 

@@ -1,0 +1,11 @@
+flowchart TB
+    Source[Chart templates and files] --> Render[Helm rendering]
+    Values[Defaults and supplied values] --> Render
+    Render --> YAML[Kubernetes manifests]
+    YAML --> Inspect[Template and lint checks]
+    YAML --> Install[Helm install or upgrade]
+    Install --> API[Kubernetes API]
+    API --> Work[Workload controllers]
+    API --> Config[Services, config and storage]
+    Work --> Pods[Wazuh pods]
+    Config --> Pods

@@ -1,0 +1,9 @@
+flowchart TB
+    Operator[Operator or automation] -->|API: 55000| API[Master management API]
+    API -->|Mint enrollment token| Agent[Compatible Wazuh 5 agent]
+    Agent -->|Enrollment and events<br/>HTTPS: 1517| Manager[Wazuh 5 manager cluster]
+    Manager -->|New indexing pipeline| Index[Wazuh 5 indexer]
+    Index -->|Detection content and state| Manager
+    Dash[Wazuh 5 dashboard] -->|Search| Index
+    Dash -->|Management| API
+    Secrets[Per-component credentials<br/>TLS certificates] -.-> Manager

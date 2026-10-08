@@ -1,0 +1,11 @@
+flowchart TB
+    Self[Self-signed Issuer] --> Root[Root CA Certificate and Secret]
+    Root --> Issuer[CA Issuer]
+    Issuer --> Node[node-tls]
+    Issuer --> Admin[admin-tls]
+    Issuer --> Beat[filebeat-tls]
+    Issuer --> Dash[dashboard-tls]
+    Node --> Index[Indexer pods]
+    Admin --> Hook[Security hook Job]
+    Beat --> Managers[Manager pods]
+    Dash --> UI[Dashboard pods<br/>Optional HTTPS]

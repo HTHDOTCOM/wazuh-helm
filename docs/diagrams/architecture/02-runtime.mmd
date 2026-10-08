@@ -1,0 +1,16 @@
+flowchart TB
+    Browser[User browser] -->|Ingress or Gateway| Dash
+    Agent[Endpoint agents and<br/>Kubernetes agent DaemonSet]
+    subgraph Namespace[Wazuh namespace]
+        Dash[Dashboard Deployment<br/>Service: 5601]
+        Master[Manager master StatefulSet<br/>Service wazuh: 1515 / 55000]
+        Worker[Manager worker StatefulSet<br/>Worker Service: 1514]
+        Index[Indexers - StatefulSet<br/>REST Service: 9200]
+        Master <-->|Cluster: 1516| Worker
+        Master -->|Alerts and state| Index
+        Worker -->|Alerts and state| Index
+        Dash -->|Search: 9200| Index
+        Dash -->|API: 55000| Master
+    end
+    Agent -->|Enrollment: 1515 or API: 55000| Master
+    Agent -->|Events: TCP 1514| Worker

@@ -1,0 +1,11 @@
+flowchart TB
+    User[Browser] --> Ingress[Ingress controller]
+    User --> Gateway[Gateway controller<br/>Existing Gateway]
+    Gateway --> Listener[Optional chart ListenerSet]
+    Listener --> Route[HTTPRoute]
+    Gateway -->|Direct attachment| Route
+    Route --> Svc[Dashboard Service - 5601]
+    Ingress --> Svc
+    Svc --> UI[Dashboard HTTP or HTTPS]
+    Edge[Optional edge TLS Secret] -.-> Listener
+    Policy[BackendTLSPolicy<br/>CA ConfigMap] -. HTTPS backend trust .-> Svc

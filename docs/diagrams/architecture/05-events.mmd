@@ -1,0 +1,16 @@
+sequenceDiagram
+    participant Agent
+    participant Master
+    participant Worker
+    participant Index as Indexer
+    participant Dash as Dashboard
+    Agent->>Master: Enroll and receive agent key
+    Master->>Worker: Synchronize agent information
+    Agent->>Worker: Send events on TCP 1514
+    Worker->>Worker: Decode events and match rules
+    Worker->>Worker: Write alerts.json
+    Worker->>Index: In-pod Filebeat ships alerts
+    Dash->>Index: Search alerts and state
+    Dash->>Master: Query status or request action
+    Master->>Worker: Coordinate supported action
+    Worker-->>Agent: Deliver action via agent channel

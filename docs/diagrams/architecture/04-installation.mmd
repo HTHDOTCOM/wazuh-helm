@@ -1,0 +1,16 @@
+sequenceDiagram
+    participant Op as Operator
+    participant Helm
+    participant K8s as Kubernetes
+    participant Pods as Wazuh pods
+    Op->>Helm: Supply values and dependencies
+    Helm->>Helm: Render manifests
+    Helm->>K8s: Install resources
+    K8s->>K8s: Provision volumes
+    K8s->>K8s: cert-manager issues TLS Secrets
+    K8s->>Pods: Schedule and mount resources
+    Pods->>Pods: Initialize configuration and state
+    Pods->>Pods: Start services
+    Helm->>K8s: Create security hook Job
+    K8s->>Pods: Job applies indexer security
+    Op->>Pods: Verify APIs and indexed alerts
