@@ -129,4 +129,4 @@ Phases are designed to be done in order. Each phase is independent enough to com
 Phases 1–8 can be done without any 5.0 images.  
 Phase 10 requires GA images and a real cluster.
 
-**Current progress**: Phases 1–9 complete (commit `6fc055e`). Phase 8.4 (helm lint) needs to be run locally. Phase 10 requires GA images and a real cluster.
+**Current progress**: Phases 1–9 complete + supplemental cleanup (README, UPGRADING, tests, CRP comments) done. Phase 8.4 (helm lint) needs to be run locally. Phase 10 requires GA images and a real cluster. All chart files verified clean of filebeat/4.14.10/2.5.5 references.

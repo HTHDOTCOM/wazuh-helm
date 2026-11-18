@@ -1,5 +1,53 @@
 # Upgrading
 
+## 2.5.5 → 3.0.0 (Wazuh 5.0.0)
+
+This is a **breaking change** release. Read all items before upgrading.
+
+### Filebeat sidecar removed
+
+Wazuh 5.0 ships no Filebeat sidecar. Remove any `wazuh.filebeat.*` values from
+your overrides. The `filebeat-tls` Secret is no longer created; remove it if
+you have it pinned elsewhere.
+
+### New TLS Secrets: remoted-tls and authd-tls
+
+Two new cert-manager `Certificate` resources are created when
+`certificates.enabled: true`:
+
+- `remoted-tls` — used by the agent event channel (port 1514)
+- `authd-tls` — used by agent enrollment (ports 1515 and 1517)
+
+These are mounted in Manager pods at `/etc/wazuh-manager/ssl/remoted/` and
+`/etc/wazuh-manager/ssl/authd/`.
+
+### New enrollment port 1517 (HTTPS)
+
+Port 1517 is added to the Master service and to `ossec.conf`. Agents on 5.0
+enroll over HTTPS. Ensure your firewall/NetworkPolicy allows agents to reach
+Master port 1517.
+
+### Indexer service account rename: admin → wazuh-server
+
+The `INDEXER_USERNAME` in the `indexer-cred` Secret changes from `admin` to
+`wazuh-server`. If you use an existing Secret (`indexer.cred.existingSecret`),
+update it before upgrading. The securityconfig bootstrap Job now creates the
+`wazuh-server` internal user automatically.
+
+### Image tags
+
+All three image tags move from `4.14.10` to `5.0.0`. Update any pinned
+overrides in your values files.
+
+### PVC mount paths
+
+The PVC subPath prefixes (`wazuh/var/ossec/…`) are unchanged from 4.x. The
+5.0 image is expected to remain compatible with these paths. Verify after
+booting the new image; see Phase 10 notes in
+`architecture/wazuh-5-migration.md`.
+
+---
+
 ## 2.5.2 → 2.5.3
 
 The default manager, indexer and dashboard images move from Wazuh 4.14.9 to

@@ -12,7 +12,7 @@ spec:
   allowed:
     # ── This policy is ONLY for end-entity certs, not for CAs
     isCA: false
-    # ── Accept any Common Name (admin, dashboard, node, filebeat, …)
+    # ── Accept any Common Name (admin, dashboard, node, remoted, authd, …)
     commonName:
       value: "*"
       required: true

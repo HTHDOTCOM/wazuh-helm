@@ -106,7 +106,7 @@ assert_eq "custom labels preserve the built-in dashboard Service app label" \
 
 echo "== default server images match the Wazuh appVersion =="
 app_version=$(yq '.appVersion' "$CHART_DIR/Chart.yaml")
-assert_eq "chart appVersion is 4.14.10" "$app_version" "4.14.10"
+assert_eq "chart appVersion is 5.0.0" "$app_version" "5.0.0"
 for workload in templates/indexer/statefulset.yaml templates/indexer/job.yaml; do
   out=$(render_only "$workload")
   assert_eq "$workload: wazuh-indexer uses the default server version" \
@@ -246,9 +246,7 @@ rm -f /tmp/wazuh-render-test-173-values.yaml
 MANAGER_CONFIGMAP=templates/manager/configmap.yaml
 MASTER_STS=templates/manager/master/statefulset.yaml
 WORKER_STS=templates/manager/worker/statefulset.yaml
-FILEBEAT_MOUNT=/var/ossec/data_tmp/exclusion/etc/filebeat/filebeat.yml
-
-echo "== bundled internal options include the Wazuh 4.14.10 rule-tree memory defaults =="
+echo "== bundled internal options include Wazuh rule-tree memory defaults =="
 internal_options=$(render_only "$MANAGER_CONFIGMAP" | yq '.data."internal_options.conf"')
 assert_eq "rule-tree memory warning defaults to 25%" \
   "$(grep -Fx 'analysisd.rule_tree_memory_warning=25%' <<<"$internal_options")" \
@@ -260,65 +258,34 @@ custom_internal_options=$'analysisd.rule_tree_memory_warning=10%\nanalysisd.rule
 out=$(render_only "$MANAGER_CONFIGMAP" --set-string "wazuh.internalOptions=$custom_internal_options" | yq '.data."internal_options.conf"')
 assert_eq "wazuh.internalOptions remains an exact full-file override" "$out" "$custom_internal_options"
 
-echo "== #174: archives disabled (default) leaves the image's filebeat.yml alone =="
+echo "== 5.0: no filebeat artifacts in ConfigMap or StatefulSets =="
 out=$(render_only "$MANAGER_CONFIGMAP")
 assert_contains "logall_json stays off on the master" "$out" '<logall_json>no</logall_json>'
 assert_not_contains "no filebeat.yml is added to the ConfigMap" "$out" "filebeat.yml:"
 for sts in "$MASTER_STS" "$WORKER_STS"; do
   out=$(render_only "$sts")
-  assert_not_contains "no filebeat.yml mount in ${sts##*/manager/}" "$out" "$FILEBEAT_MOUNT"
+  assert_not_contains "no filebeat-certs volume in ${sts##*/manager/}" "$out" "filebeat-certs"
+  assert_not_contains "no FILEBEAT_ env var in ${sts##*/manager/}" "$out" "FILEBEAT_"
 done
 
-echo "== #174: wazuh.archives.enabled turns on both halves at once =="
+echo "== wazuh.archives.enabled controls logall_json (5.0: no filebeat, json written directly) =="
 archives_args=(--set wazuh.archives.enabled=true)
 out=$(render_only "$MANAGER_CONFIGMAP" "${archives_args[@]}")
 assert_not_contains "logall_json is on for master and worker alike" "$out" '<logall_json>no</logall_json>'
-assert_contains "filebeat ships the archives fileset" "$out" 'archives:\n      enabled: true'
-assert_contains "the alerts fileset is left enabled" "$out" 'alerts:\n      enabled: true'
-# The entrypoint seds these lines in place; without them filebeat ships nothing.
-for placeholder in "hosts: ['https://wazuh.indexer:9200']" '#username:' '#password:' \
-                   '#ssl.verification_mode:' '#ssl.certificate_authorities:' '#ssl.certificate:' '#ssl.key:'; do
-  assert_contains "entrypoint placeholder is preserved: $placeholder" "$out" "$placeholder"
-done
-for sts in "$MASTER_STS" "$WORKER_STS"; do
-  out=$(render_only "$sts" "${archives_args[@]}")
-  assert_contains "filebeat.yml is mounted in ${sts##*/manager/}" "$out" "$FILEBEAT_MOUNT"
-done
+assert_contains "logall_json set to yes" "$out" '<logall_json>yes</logall_json>'
 
-echo "== #174: the new nested sections are optional (helm upgrade --reuse-values) =="
-# A release upgraded with --reuse-values carries the old release's values, which have no
-# wazuh.archives and no wazuh.filebeat at all. Absent must read as false / "", not explode.
-absent_args=(--set wazuh.archives=null --set wazuh.filebeat=null)
-expect_success "chart renders with both sections absent" render "${absent_args[@]}"
+echo "== archives section is optional (helm upgrade --reuse-values) =="
+absent_args=(--set wazuh.archives=null)
+expect_success "chart renders with archives section absent" render "${absent_args[@]}"
 out=$(render_only "$MANAGER_CONFIGMAP" "${absent_args[@]}")
 assert_contains "absent wazuh.archives reads as disabled" "$out" '<logall_json>no</logall_json>'
-assert_not_contains "absent wazuh.filebeat adds no filebeat.yml" "$out" "filebeat.yml:"
-out=$(render_only "$MASTER_STS" "${absent_args[@]}")
-assert_not_contains "absent sections mount nothing" "$out" "$FILEBEAT_MOUNT"
-expect_success "archives still works with only wazuh.filebeat absent" \
-  render --set wazuh.filebeat=null --set wazuh.archives.enabled=true
 
-echo "== #174: full-file overrides win over wazuh.archives.enabled =="
-# Documented precedence: an override replaces the generated file, so it takes the archives
-# setting with it. Each half can be left off, which ships no archives without failing.
+echo "== full-file overrides win over wazuh.archives.enabled =="
 out=$(render_only "$MANAGER_CONFIGMAP" --set wazuh.archives.enabled=true --set 'wazuh.masterConf=<ossec_config></ossec_config>')
 assert_contains "masterConf wins: master.conf is the override verbatim" "$out" 'master.conf: "<ossec_config></ossec_config>"'
 assert_contains "the worker is still generated, so it keeps logall_json" "$out" '<logall_json>yes</logall_json>'
 out=$(render_only "$MANAGER_CONFIGMAP" --set wazuh.archives.enabled=true --set 'wazuh.workerConf=<ossec_config></ossec_config>')
 assert_contains "workerConf wins: worker.conf is the override verbatim" "$out" 'worker.conf: "<ossec_config></ossec_config>"'
-out=$(render_only "$MANAGER_CONFIGMAP" --set wazuh.archives.enabled=true --set 'wazuh.filebeat.config=# mine')
-assert_contains "filebeat.config wins over the archives fileset" "$out" 'filebeat.yml: "# mine"'
-assert_not_contains "the generated filebeat config is dropped entirely" "$out" 'filebeat.modules'
-assert_contains "but logall_json is still set, so managers write archives nobody ships" "$out" '<logall_json>yes</logall_json>'
-
-echo "== #174: wazuh.filebeat.config replaces the file without enabling archives =="
-override_args=(--set 'wazuh.filebeat.config=# my own filebeat')
-out=$(render_only "$MANAGER_CONFIGMAP" "${override_args[@]}")
-assert_contains "the override replaces the generated config" "$out" '# my own filebeat'
-assert_not_contains "the generated config is not also emitted" "$out" 'filebeat.modules'
-assert_contains "an override alone does not enable archives" "$out" '<logall_json>no</logall_json>'
-out=$(render_only "$MASTER_STS" "${override_args[@]}")
-assert_contains "an override alone still mounts filebeat.yml" "$out" "$FILEBEAT_MOUNT"
 
 echo "== wazuh.syslog.allowedIps restricts the workers' syslog listener =="
 out=$(render_only "$MANAGER_CONFIGMAP")
@@ -515,7 +482,7 @@ assert_eq "job container drops all capabilities" "$(yq '.spec.template.spec.cont
 assert_eq "job container read-only root" "$(yq '.spec.template.spec.containers[0].securityContext.readOnlyRootFilesystem' <<<"$out")" "true"
 assert_eq "job container no privilege escalation" "$(yq '.spec.template.spec.containers[0].securityContext.allowPrivilegeEscalation' <<<"$out")" "false"
 assert_eq "job container securityContext can be overridden" "$(render_only "$RR_JOB" "${RR[@]}" --set wazuh.rulesetReload.securityContext.readOnlyRootFilesystem=false | yq '.spec.template.spec.containers[0].securityContext.readOnlyRootFilesystem')" "false"
-assert_eq "job uses the manager image" "$(yq '.spec.template.spec.containers[0].image' <<<"$out")" "wazuh/wazuh-manager:4.14.10"
+assert_eq "job uses the manager image" "$(yq '.spec.template.spec.containers[0].image' <<<"$out")" "wazuh/wazuh-manager:5.0.0"
 assert_eq "job api url" "$(job_env WAZUH_API_URL <<<"$out")" "https://test-wazuh:55000"
 assert_eq "expected nodes, 2 workers" "$(render_only "$RR_JOB" "${RR[@]}" --set wazuh.worker.replicas=2 | job_env EXPECTED_NODES)" "test-wazuh-manager-master-0,test-wazuh-manager-worker-0,test-wazuh-manager-worker-1"
 assert_eq "expected nodes, workers disabled" "$(render_only "$RR_JOB" "${RR[@]}" --set wazuh.worker.enabled=false | job_env EXPECTED_NODES)" "test-wazuh-manager-master-0"
