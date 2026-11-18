@@ -1677,6 +1677,21 @@
           },
           "additionalProperties": false
         },
+        "authdCert": {
+          "type": "object",
+          "properties": {
+            "certificate": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
         "clusterKey": {
           "type": "object",
           "properties": {
@@ -1694,6 +1709,21 @@
         },
         "extraInitContainers": {
           "type": "array"
+        },
+        "remoted": {
+          "type": "object",
+          "properties": {
+            "certificate": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
         },
         "images": {
           "type": "object",
