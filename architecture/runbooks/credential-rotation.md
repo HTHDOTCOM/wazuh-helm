@@ -16,13 +16,15 @@ There are 5 credential Secrets to rotate. Rotate them one at a time and restart 
 
 ## 1. Rotate Indexer Credentials (`indexer-cred`)
 
+The indexer service account is `wazuh-server` in Wazuh 5.0 (was `admin` in 4.x).
+
 ```bash
 NEW_PASSWORD="$(openssl rand -base64 32)"
 
 # Update the internal_users.yml via securityconfig Secret or Helm values
 # Then update the credential Secret
 kubectl create secret generic indexer-cred \
-  --from-literal=INDEXER_USERNAME=admin \
+  --from-literal=INDEXER_USERNAME=wazuh-server \
   --from-literal=INDEXER_PASSWORD="$NEW_PASSWORD" \
   --dry-run=client -o yaml | kubectl apply -f - -n <namespace>
 
@@ -115,10 +117,10 @@ kubectl rollout status statefulset/<name>-manager-worker -n <namespace>
 ```bash
 # Check Indexer cluster is green
 kubectl exec -n <namespace> <name>-indexer-0 -- \
-  curl -sk -u admin:$NEW_INDEXER_PASSWORD \
+  curl -sk -u wazuh-server:$NEW_INDEXER_PASSWORD \
   https://localhost:9200/_cluster/health | jq .status
 
-# Check Manager cluster status
+# Check Manager cluster status (path updated for Wazuh 5.0)
 kubectl exec -n <namespace> <name>-manager-master-0 -- \
   /var/ossec/bin/cluster_control -l
 

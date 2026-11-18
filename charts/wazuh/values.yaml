@@ -353,8 +353,8 @@ indexer:
   storageSize: 50Gi
   storageClass: null # @schema type: [string, null]
   ## @param indexer.cred.existingSecret Name of the existingSecret which holds the key "INDEXER_PASSWORD".
-  ## @param indexer.cred.password Value of the password for the admin user.
-  ## @param indexer.cred.passwordHash Hash of the password for the admin user.
+  ## @param indexer.cred.password Value of the password for the wazuh-server user (5.0+; was admin in 4.x).
+  ## @param indexer.cred.passwordHash Hash of the password for the wazuh-server user.
   cred:
     existingSecret: ""
     passwordHash: "$2a$12$zGWIT7wkPKT/zww3bmMyp.KuWXH4RzgxiB91Q8NGFcqpyPy.R2Rcq"

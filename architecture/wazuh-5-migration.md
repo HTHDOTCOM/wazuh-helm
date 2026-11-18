@@ -52,9 +52,9 @@ Status legend: `[ ]` todo · `[x]` done · `[~]` stub only (needs GA image verif
 
 ## Phase 4 — New Agent Protocol (port 1517, HTTPS enrollment)
 
-- [ ] **4.1** `manager/master/service.yaml` — add port 1517 (`remoted-https`) to the Service spec
-- [ ] **4.2** `values.yaml` — add `wazuh.master.service.ports` entry for 1517
-- [ ] **4.3** `_ossec_conf.tpl` — add `<remote>` block for HTTPS protocol on port 1517
+- [x] **4.1** `manager/master/service.yaml` — port 1517 added via values.yaml (service is data-driven)
+- [x] **4.2** `values.yaml` — added `enrollment-https` port 1517 to `wazuh.master.service.ports`
+- [x] **4.3** `_ossec_conf.tpl` — added `<remote>` block for port 1517 (master-only)
 - [~] **4.4** `manager/master/statefulset.yaml` — add enrollment token Secret volume + env var  
   *(stub — exact Secret key name needs 5.0 GA image verification)*
 - [~] **4.5** `manager/master/statefulset.yaml` — add `WAZUH_ENROLLMENT_PORT=1517` env var  
@@ -66,32 +66,28 @@ Status legend: `[ ]` todo · `[x]` done · `[~]` stub only (needs GA image verif
 
 ## Phase 5 — Cluster Always-On + ossec.conf Cleanup
 
-- [ ] **5.1** `_ossec_conf.tpl` — remove `<disabled>yes</disabled>` from `<cluster>` block  
-  (5.0 requires cluster mode always enabled; single-node "cluster" of 1 master is valid)
-- [ ] **5.2** `_ossec_conf.tpl` — update `<cluster>` node_type to use `master`/`worker` literals
-- [ ] **5.3** `_ossec_conf.tpl` — remove Filebeat `<logall_json>` block (no Filebeat consumer)
+- [x] **5.1** `_ossec_conf.tpl` — `<disabled>no</disabled>` was already correct (no change needed)
+- [x] **5.2** `_ossec_conf.tpl` — `master`/`worker` node_type literals already correct (no change needed)
+- [x] **5.3** `_ossec_conf.tpl` — `<logall_json>` is Wazuh-native (not Filebeat-specific); kept as-is
 
 ---
 
 ## Phase 6 — Indexer Credential User Rename (admin → wazuh-server)
 
-- [ ] **6.1** `indexer/secret.yaml` — change default INDEXER_USERNAME from `admin` to `wazuh-server`
-- [ ] **6.2** `manager/configmap.yaml` / `_ossec_conf.tpl` — update username used for indexer API calls
-- [ ] **6.3** `indexer/securityconfig.yaml` or equivalent — update internal_users.yml template to use `wazuh-server` role
-- [ ] **6.4** `values.yaml` — update default `indexer.cred` comment and example from `admin` to `wazuh-server`
-- [ ] **6.5** `architecture/runbooks/credential-rotation.md` — update Rotate Indexer Credentials section
+- [x] **6.1** `indexer/secret.yaml` — INDEXER_USERNAME changed from `admin` to `wazuh-server`
+- [x] **6.2** `_ossec_conf.tpl` — username set via INDEXER_USERNAME env var injected by secretRef (no hardcoded user in template)
+- [x] **6.3** `indexer/secret-securityconfig.yaml` — added `wazuh-server` internal user entry with admin backend_role
+- [x] **6.4** `values.yaml` — updated indexer.cred comments from `admin` to `wazuh-server`
+- [x] **6.5** `architecture/runbooks/credential-rotation.md` — updated `admin` → `wazuh-server` throughout
 
 ---
 
 ## Phase 7 — Chart Metadata + Image Tags
 
-- [ ] **7.1** `Chart.yaml` — bump `appVersion` to `5.0.0`
-- [ ] **7.2** `Chart.yaml` — bump chart `version` to `3.0.0` (major bump = breaking changes)
-- [ ] **7.3** `Chart.yaml` — update `artifacthub.io/changes` block
-- [ ] **7.4** `values.yaml` — update all `images.tag` defaults to `5.0.0`:
-  - `indexer.images.tag`
-  - `dashboard.images.tag`
-  - `wazuh.images.tag`
+- [x] **7.1** `Chart.yaml` — appVersion 4.14.10 → 5.0.0
+- [x] **7.2** `Chart.yaml` — chart version 2.5.5 → 3.0.0
+- [x] **7.3** `Chart.yaml` — artifacthub.io/changes updated for 5.0 release notes
+- [x] **7.4** `values.yaml` — all image tags updated to 5.0.0 (indexer, dashboard, manager)
 
 ---
 
@@ -132,4 +128,4 @@ Phases are designed to be done in order. Each phase is independent enough to com
 Phases 1–8 can be done without any 5.0 images.  
 Phase 10 requires GA images and a real cluster.
 
-**Current progress**: Phase 1 complete (commit `8b96367`). Next: Phase 2 — new TLS certs.
+**Current progress**: Phases 1–7 complete (commit `56a15c1`). Next: Phase 8 — schema cleanup, then Phase 9 — docs.
