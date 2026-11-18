@@ -10,16 +10,16 @@ Status legend: `[ ]` todo · `[x]` done · `[~]` stub only (needs GA image verif
 
 ## Phase 1 — Remove Filebeat (5.0 ships no Filebeat sidecar)
 
-- [ ] **1.1** Delete `charts/wazuh/templates/certs/filebeat/certificate.yaml`
-- [ ] **1.2** Delete `charts/wazuh/templates/_filebeat_config.tpl`
-- [ ] **1.3** `manager/master/statefulset.yaml` — remove `filebeat-certs` volume
-- [ ] **1.4** `manager/master/statefulset.yaml` — remove all filebeat volumeMounts from wazuh-manager container
-- [ ] **1.5** `manager/master/statefulset.yaml` — remove filebeat env vars (`FILEBEAT_SSL_CERTIFICATE_AUTHORITIES`, `FILEBEAT_SSL_CERTIFICATE`, `FILEBEAT_SSL_KEY`)
-- [ ] **1.6** `manager/master/statefulset.yaml` — remove `checksum/filebeat-certificate` autoreload annotation
-- [ ] **1.7** `manager/worker/statefulset.yaml` — same removals as 1.3–1.6
-- [ ] **1.8** `manager/configmap.yaml` — remove filebeat.yml key from ConfigMap data
-- [ ] **1.9** `values.yaml` — remove `wazuh.filebeat` section entirely
-- [ ] **1.10** `values.schema.json` — remove filebeat property from schema
+- [x] **1.1** Delete `charts/wazuh/templates/certs/filebeat/certificate.yaml`
+- [x] **1.2** Delete `charts/wazuh/templates/_filebeat_config.tpl`
+- [x] **1.3** `manager/master/statefulset.yaml` — remove `filebeat-certs` volume
+- [x] **1.4** `manager/master/statefulset.yaml` — remove all filebeat volumeMounts from wazuh-manager container
+- [x] **1.5** `manager/master/statefulset.yaml` — remove filebeat env vars (`FILEBEAT_SSL_CERTIFICATE_AUTHORITIES`, `FILEBEAT_SSL_CERTIFICATE`, `FILEBEAT_SSL_KEY`)
+- [x] **1.6** `manager/master/statefulset.yaml` — remove `checksum/filebeat-certificate` autoreload annotation
+- [x] **1.7** `manager/worker/statefulset.yaml` — same removals as 1.3–1.6
+- [x] **1.8** `manager/configmap.yaml` — remove filebeat.yml key from ConfigMap data
+- [x] **1.9** `values.yaml` — remove `wazuh.filebeat` section entirely
+- [x] **1.10** `values.schema.json` — remove filebeat property from schema
 
 ---
 
@@ -132,4 +132,4 @@ Phases are designed to be done in order. Each phase is independent enough to com
 Phases 1–8 can be done without any 5.0 images.  
 Phase 10 requires GA images and a real cluster.
 
-**Current progress**: branch created, TODO written. Start with Phase 1.
+**Current progress**: Phase 1 complete (commit `8b96367`). Next: Phase 2 — new TLS certs.
