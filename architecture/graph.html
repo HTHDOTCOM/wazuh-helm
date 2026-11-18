@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Wazuh Helm — Architecture Graph</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0d1117;color:#c9d1d9;font-family:'Segoe UI',system-ui,sans-serif;overflow:hidden}
+#toolbar{position:fixed;top:0;left:0;right:0;height:48px;background:#161b22;border-bottom:1px solid #30363d;
+         display:flex;align-items:center;gap:8px;padding:0 16px;z-index:100}
+#toolbar h1{font-size:13px;font-weight:700;color:#f0f6fc;margin-right:8px}
+.filter-btn{padding:4px 12px;border-radius:14px;font-size:11px;font-weight:600;cursor:pointer;
+            border:1px solid #30363d;background:#21262d;color:#8b949e;transition:all .15s}
+.filter-btn.active{color:#0d1117}
+.filter-btn:hover{opacity:.85}
+#reset-btn{margin-left:auto;padding:4px 12px;border-radius:6px;font-size:11px;cursor:pointer;
+           border:1px solid #30363d;background:#21262d;color:#8b949e}
+#reset-btn:hover{background:#30363d;color:#f0f6fc}
+#canvas{position:fixed;top:48px;left:0;right:0;bottom:0}
+.tooltip{position:fixed;background:#1c2128;border:1px solid #30363d;border-radius:8px;
+         padding:10px 14px;font-size:12px;pointer-events:none;z-index:200;max-width:260px;
+         box-shadow:0 8px 24px rgba(0,0,0,.5);display:none}
+.tooltip-title{font-weight:700;color:#f0f6fc;margin-bottom:5px}
+.tooltip-row{color:#8b949e;line-height:1.5}
+.tooltip-row span{color:#c9d1d9}
+.lane-label{font-size:11px;font-weight:700;fill:#8b949e;text-transform:uppercase;letter-spacing:.08em}
+</style>
+</head>
+<body>
+<div id="toolbar">
+  <h1>Wazuh Architecture</h1>
+  <button class="filter-btn active" data-layer="all" style="border-color:#8b949e;background:#30363d;color:#f0f6fc">All</button>
+  <button class="filter-btn" data-layer="pki"      style="--c:#79c0ff">PKI</button>
+  <button class="filter-btn" data-layer="secrets"  style="--c:#f78166">Secrets</button>
+  <button class="filter-btn" data-layer="storage"  style="--c:#d2a8ff">Storage</button>
+  <button class="filter-btn" data-layer="workload" style="--c:#56d364">Workloads</button>
+  <button class="filter-btn" data-layer="network"  style="--c:#ffa657">Networking</button>
+  <button class="filter-btn" data-layer="cicd"     style="--c:#3fb950">CI/CD</button>
+  <button id="reset-btn">Reset view</button>
+</div>
+<div id="canvas"></div>
+<div class="tooltip" id="tooltip"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+<script>
+const W = window.innerWidth, H = window.innerHeight - 48;
+const LANE_H = (H - 40) / 6;
+
+const LAYERS = [
+  { id: 'pki',      label: 'PKI / Bootstrap',    color: '#79c0ff', bg: '#0d1f3c' },
+  { id: 'secrets',  label: 'Secrets & Config',    color: '#f78166', bg: '#2a0d0d' },
+  { id: 'storage',  label: 'Storage',             color: '#d2a8ff', bg: '#1a112b' },
+  { id: 'workload', label: 'Workloads',           color: '#56d364', bg: '#0f2d14' },
+  { id: 'network',  label: 'Networking',          color: '#ffa657', bg: '#2a1a06' },
+  { id: 'cicd',     label: 'CI / CD',             color: '#3fb950', bg: '#0a1f0a' },
+];
+
+const NODES = [
+  // PKI
+  { id:'ss-issuer',    label:'SelfSigned\nIssuer',    layer:'pki',      kind:'Issuer',       desc:'cert-manager SelfSigned Issuer. Issues the Root CA certificate.' },
+  { id:'root-ca',      label:'Root CA\nCertificate',  layer:'pki',      kind:'Certificate',  desc:'Root CA cert, 90d validity. Stored in Secret root-ca-tls.' },
+  { id:'ca-issuer',    label:'CA Issuer',             layer:'pki',      kind:'Issuer',       desc:'CA Issuer backed by root-ca-tls. Signs all leaf certificates.' },
+  { id:'node-tls',     label:'node-tls',              layer:'pki',      kind:'Secret/TLS',   desc:'TLS cert for Indexer nodes. Mounted at /config/certs/node.pem.' },
+  { id:'admin-tls',    label:'admin-tls',             layer:'pki',      kind:'Secret/TLS',   desc:'TLS cert for securityadmin Job. Used to run securityadmin.sh.' },
+  { id:'dashboard-tls',label:'dashboard-tls',         layer:'pki',      kind:'Secret/TLS',   desc:'TLS cert for Dashboard. Mounted in Dashboard pod.' },
+  { id:'filebeat-tls', label:'filebeat-tls',          layer:'pki',      kind:'Secret/TLS',   desc:'TLS cert for Filebeat sidecar in Manager. Connects to Indexer :9200.' },
+  { id:'api-tls',      label:'api-tls',               layer:'pki',      kind:'Secret/TLS',   desc:'TLS cert for Manager API (optional). Enabled via wazuh.api.certificate.' },
+  // Secrets & Config
+  { id:'indexer-cred', label:'indexer-cred',          layer:'secrets',  kind:'Secret/Opaque',desc:'INDEXER_USERNAME + INDEXER_PASSWORD. Used by Indexer, Manager, Dashboard.' },
+  { id:'dashboard-cred',label:'dashboard-cred',       layer:'secrets',  kind:'Secret/Opaque',desc:'DASHBOARD_USERNAME + DASHBOARD_PASSWORD. Used by Dashboard only.' },
+  { id:'api-cred',     label:'wazuh-api-cred',        layer:'secrets',  kind:'Secret/Opaque',desc:'WAZUH_API_USER + WAZUH_API_PASSWORD. Used by Manager, Dashboard, Agent.' },
+  { id:'authd-pass',   label:'wazuh-authd-pass',      layer:'secrets',  kind:'Secret/Opaque',desc:'Agent enrollment password. Used by Manager Master authd and Agent DaemonSet.' },
+  { id:'cluster-key',  label:'wazuh-cluster-key',     layer:'secrets',  kind:'Secret/Opaque',desc:'32-char hex key shared by Master and all Workers for cluster comms.' },
+  { id:'securityconfig',label:'securityconfig\n(CM)',  layer:'secrets',  kind:'Secret',       desc:'OpenSearch security config: internal_users.yml, roles.yml, roles_mapping.yml, config.yml.' },
+  { id:'indexer-cm',   label:'indexer-config\n(CM)',  layer:'secrets',  kind:'ConfigMap',    desc:'opensearch.yml, tenants.yml, nodes_dn.yml, whitelist.yml.' },
+  { id:'manager-cm',   label:'manager-config\n(CM)',  layer:'secrets',  kind:'ConfigMap',    desc:'ossec.conf (master + worker variants), script.sh, filebeat.yml.' },
+  { id:'dashboard-cm', label:'dashboard-config\n(CM)',layer:'secrets',  kind:'ConfigMap',    desc:'opensearch_dashboards.yml for Dashboard.' },
+  // Storage
+  { id:'pvc-idx-0',    label:'indexer-PVC-0\n50Gi',  layer:'storage',  kind:'PVC',          desc:'PersistentVolumeClaim for Indexer pod 0. ReadWriteOnce.' },
+  { id:'pvc-idx-1',    label:'indexer-PVC-1\n50Gi',  layer:'storage',  kind:'PVC',          desc:'PersistentVolumeClaim for Indexer pod 1. ReadWriteOnce.' },
+  { id:'pvc-idx-2',    label:'indexer-PVC-2\n50Gi',  layer:'storage',  kind:'PVC',          desc:'PersistentVolumeClaim for Indexer pod 2. ReadWriteOnce.' },
+  { id:'pvc-master',   label:'manager-master\nPVC',  layer:'storage',  kind:'PVC',          desc:'PVC for Manager Master pod. ReadWriteOnce.' },
+  { id:'pvc-worker',   label:'manager-worker\nPVCs', layer:'storage',  kind:'PVC',          desc:'PVC per Manager Worker pod. ReadWriteOnce.' },
+  // Workloads
+  { id:'indexer-sts',  label:'Indexer\nStatefulSet',   layer:'workload', kind:'StatefulSet',  desc:'wazuh/wazuh-indexer:4.14.10. 3 replicas (default). OpenSearch node.' },
+  { id:'sec-job',      label:'securityadmin\nJob',     layer:'workload', kind:'Job',          desc:'Post-install/upgrade hook. Runs securityadmin.sh to bootstrap OpenSearch security.' },
+  { id:'ruleset-job',  label:'ruleset-reload\nJob',   layer:'workload', kind:'Job',          desc:'Reloads Wazuh rules/decoders on running Manager pods without restart.' },
+  { id:'master-sts',   label:'Manager Master\nStatefulSet', layer:'workload', kind:'StatefulSet', desc:'wazuh/wazuh-manager:4.14.10. Always 1 replica. initContainer merges ossec.conf.' },
+  { id:'worker-sts',   label:'Manager Worker\nStatefulSet', layer:'workload', kind:'StatefulSet', desc:'wazuh/wazuh-manager:4.14.10. Default 2 replicas. Processes agent events.' },
+  { id:'dashboard-dep',label:'Dashboard\nDeployment',  layer:'workload', kind:'Deployment',   desc:'wazuh/wazuh-dashboard:4.14.10. 1 replica default. Port 5601 HTTPS.' },
+  { id:'agent-ds',     label:'Agent\nDaemonSet',       layer:'workload', kind:'DaemonSet',    desc:'One Agent pod per node. Ships host events to Manager Worker :1514.' },
+  // Networking
+  { id:'svc-indexer',  label:'indexer\nsvc :9200',    layer:'network',  kind:'Service/ClusterIP', desc:'REST endpoint for Indexer. Used by Manager (Filebeat), Dashboard, securityadmin Job.' },
+  { id:'svc-idx-nodes',label:'indexer-nodes\nsvc :9300', layer:'network', kind:'Service/Headless', desc:'Headless service for Indexer transport. Pods discover peers via DNS.' },
+  { id:'svc-master',   label:'manager-master\nsvc :1515/:55000', layer:'network', kind:'Service/ClusterIP', desc:'Agent enrollment (:1515) and Manager REST API (:55000).' },
+  { id:'svc-cluster',  label:'manager-cluster\nsvc :1516', layer:'network', kind:'Service/Headless', desc:'Headless service for Manager cluster comms between Master and Workers.' },
+  { id:'svc-worker',   label:'manager-worker\nsvc :1514', layer:'network', kind:'Service/ClusterIP', desc:'Agent event shipping endpoint. Agents connect here to send events.' },
+  { id:'svc-dashboard',label:'dashboard\nsvc :5601',   layer:'network',  kind:'Service/ClusterIP', desc:'Dashboard service. Exposed via Ingress or Gateway API.' },
+  { id:'ingress',      label:'Ingress /\nGateway API', layer:'network',  kind:'Ingress',      desc:'Optional. Exposes Dashboard and/or Manager API to external traffic.' },
+  // CI/CD
+  { id:'gh-actions',   label:'GH Actions\nrelease.yaml', layer:'cicd',  kind:'Workflow',     desc:'Triggered on push to main. Runs chart-releaser-action to package and publish.' },
+  { id:'cr-action',    label:'chart-releaser\naction', layer:'cicd',    kind:'Action',       desc:'cr package → cr upload (GitHub Releases) → cr index (gh-pages branch).' },
+  { id:'gh-pages',     label:'gh-pages\nbranch',       layer:'cicd',    kind:'Branch',       desc:'Hosts the Helm repo index.yaml. Artifact Hub reads from here.' },
+];
+
+const EDGES = [
+  // PKI chain
+  {s:'ss-issuer', t:'root-ca',       c:'#79c0ff'},
+  {s:'root-ca',   t:'ca-issuer',     c:'#79c0ff'},
+  {s:'ca-issuer', t:'node-tls',      c:'#79c0ff'},
+  {s:'ca-issuer', t:'admin-tls',     c:'#79c0ff'},
+  {s:'ca-issuer', t:'dashboard-tls', c:'#79c0ff'},
+  {s:'ca-issuer', t:'filebeat-tls',  c:'#79c0ff'},
+  {s:'ca-issuer', t:'api-tls',       c:'#79c0ff'},
+  // Secrets → workloads
+  {s:'node-tls',      t:'indexer-sts',   c:'#f78166'},
+  {s:'node-tls',      t:'sec-job',       c:'#f78166'},
+  {s:'admin-tls',     t:'sec-job',       c:'#f78166'},
+  {s:'dashboard-tls', t:'dashboard-dep', c:'#f78166'},
+  {s:'filebeat-tls',  t:'master-sts',    c:'#f78166'},
+  {s:'api-tls',       t:'master-sts',    c:'#f78166'},
+  {s:'indexer-cred',  t:'indexer-sts',   c:'#f78166'},
+  {s:'indexer-cred',  t:'master-sts',    c:'#f78166'},
+  {s:'indexer-cred',  t:'worker-sts',    c:'#f78166'},
+  {s:'indexer-cred',  t:'dashboard-dep', c:'#f78166'},
+  {s:'dashboard-cred',t:'dashboard-dep', c:'#f78166'},
+  {s:'api-cred',      t:'master-sts',    c:'#f78166'},
+  {s:'api-cred',      t:'worker-sts',    c:'#f78166'},
+  {s:'api-cred',      t:'dashboard-dep', c:'#f78166'},
+  {s:'api-cred',      t:'agent-ds',      c:'#f78166'},
+  {s:'authd-pass',    t:'master-sts',    c:'#f78166'},
+  {s:'authd-pass',    t:'agent-ds',      c:'#f78166'},
+  {s:'cluster-key',   t:'master-sts',    c:'#f78166'},
+  {s:'cluster-key',   t:'worker-sts',    c:'#f78166'},
+  {s:'securityconfig',t:'indexer-sts',   c:'#d2a8ff'},
+  {s:'securityconfig',t:'sec-job',       c:'#d2a8ff'},
+  {s:'indexer-cm',    t:'indexer-sts',   c:'#d2a8ff'},
+  {s:'indexer-cm',    t:'sec-job',       c:'#d2a8ff'},
+  {s:'manager-cm',    t:'master-sts',    c:'#d2a8ff'},
+  {s:'manager-cm',    t:'worker-sts',    c:'#d2a8ff'},
+  {s:'dashboard-cm',  t:'dashboard-dep', c:'#d2a8ff'},
+  // Storage → workloads
+  {s:'pvc-idx-0',  t:'indexer-sts', c:'#d2a8ff'},
+  {s:'pvc-idx-1',  t:'indexer-sts', c:'#d2a8ff'},
+  {s:'pvc-idx-2',  t:'indexer-sts', c:'#d2a8ff'},
+  {s:'pvc-master', t:'master-sts',  c:'#d2a8ff'},
+  {s:'pvc-worker', t:'worker-sts',  c:'#d2a8ff'},
+  // Workloads → services
+  {s:'indexer-sts',   t:'svc-indexer',   c:'#ffa657'},
+  {s:'indexer-sts',   t:'svc-idx-nodes', c:'#ffa657'},
+  {s:'master-sts',    t:'svc-master',    c:'#ffa657'},
+  {s:'master-sts',    t:'svc-cluster',   c:'#ffa657'},
+  {s:'worker-sts',    t:'svc-worker',    c:'#ffa657'},
+  {s:'worker-sts',    t:'svc-cluster',   c:'#ffa657'},
+  {s:'dashboard-dep', t:'svc-dashboard', c:'#ffa657'},
+  {s:'svc-dashboard', t:'ingress',       c:'#ffa657'},
+  {s:'svc-master',    t:'ingress',       c:'#ffa657'},
+  // Inter-workload traffic
+  {s:'master-sts',    t:'svc-indexer',   c:'#56d364'},
+  {s:'worker-sts',    t:'svc-indexer',   c:'#56d364'},
+  {s:'dashboard-dep', t:'svc-indexer',   c:'#56d364'},
+  {s:'dashboard-dep', t:'svc-master',    c:'#56d364'},
+  {s:'agent-ds',      t:'svc-worker',    c:'#56d364'},
+  {s:'agent-ds',      t:'svc-master',    c:'#56d364'},
+  {s:'sec-job',       t:'svc-indexer',   c:'#56d364'},
+  // CI/CD
+  {s:'gh-actions', t:'cr-action', c:'#3fb950'},
+  {s:'cr-action',  t:'gh-pages',  c:'#3fb950'},
+];
+
+// Layout: distribute nodes evenly within their lane
+const layerOrder = LAYERS.map(l => l.id);
+const nodesByLayer = {};
+layerOrder.forEach(id => { nodesByLayer[id] = []; });
+NODES.forEach(n => nodesByLayer[n.layer].push(n));
+
+const PADDING = 60;
+const NODE_W = 110, NODE_H = 50;
+
+NODES.forEach(n => {
+  const li = layerOrder.indexOf(n.layer);
+  const peers = nodesByLayer[n.layer];
+  const pi = peers.indexOf(n);
+  const cols = peers.length;
+  const totalW = W - PADDING * 2;
+  const colW = totalW / cols;
+  n.x = PADDING + colW * pi + colW / 2;
+  n.y = 20 + li * LANE_H + LANE_H / 2;
+});
+
+const nodeMap = {};
+NODES.forEach(n => nodeMap[n.id] = n);
+
+// SVG
+const svg = d3.select('#canvas').append('svg')
+  .attr('width', W).attr('height', H);
+
+const defs = svg.append('defs');
+
+// Arrow markers per color
+const arrowColors = [...new Set(EDGES.map(e => e.c))];
+arrowColors.forEach(color => {
+  defs.append('marker')
+    .attr('id', 'arrow-' + color.replace('#',''))
+    .attr('viewBox','0 -4 8 8').attr('refX',8).attr('refY',0)
+    .attr('markerWidth',6).attr('markerHeight',6)
+    .attr('orient','auto')
+    .append('path').attr('d','M0,-4L8,0L0,4').attr('fill',color);
+});
+
+const zoom = d3.zoom().scaleExtent([0.2, 3])
+  .on('zoom', e => g.attr('transform', e.transform));
+svg.call(zoom);
+
+const g = svg.append('g');
+
+// Lane backgrounds
+LAYERS.forEach((layer, i) => {
+  g.append('rect')
+    .attr('x', 0).attr('y', 20 + i * LANE_H)
+    .attr('width', W).attr('height', LANE_H)
+    .attr('fill', layer.bg).attr('opacity', 0.5);
+  g.append('text').attr('class','lane-label')
+    .attr('x', 10).attr('y', 20 + i * LANE_H + 16)
+    .attr('fill', layer.color)
+    .text(layer.label);
+});
+
+// Edges
+const edgeG = g.append('g').attr('class','edges');
+const edgePaths = edgeG.selectAll('path').data(EDGES).enter().append('path')
+  .attr('fill','none')
+  .attr('stroke', d => d.c)
+  .attr('stroke-width', 1.5)
+  .attr('stroke-opacity', 0.6)
+  .attr('marker-end', d => `url(#arrow-${d.c.replace('#','')})`)
+  .attr('d', d => {
+    const s = nodeMap[d.s], t = nodeMap[d.t];
+    if (!s || !t) return '';
+    const mx = (s.x + t.x) / 2;
+    const my = (s.y + t.y) / 2;
+    const dy = (t.y - s.y) * 0.4;
+    return `M${s.x},${s.y} C${s.x},${s.y+dy} ${t.x},${t.y-dy} ${t.x},${t.y}`;
+  });
+
+// Nodes
+const nodeG = g.append('g').attr('class','nodes');
+const nodeGroups = nodeG.selectAll('g').data(NODES).enter().append('g')
+  .attr('transform', d => `translate(${d.x},${d.y})`)
+  .style('cursor','pointer');
+
+nodeGroups.append('rect')
+  .attr('x', -NODE_W/2).attr('y', -NODE_H/2)
+  .attr('width', NODE_W).attr('height', NODE_H)
+  .attr('rx', 8).attr('ry', 8)
+  .attr('fill', d => LAYERS.find(l=>l.id===d.layer).bg)
+  .attr('stroke', d => LAYERS.find(l=>l.id===d.layer).color)
+  .attr('stroke-width', 1.5);
+
+nodeGroups.each(function(d) {
+  const lines = d.label.split('\n');
+  const g = d3.select(this);
+  if (lines.length === 1) {
+    g.append('text').attr('text-anchor','middle').attr('dominant-baseline','middle')
+      .attr('font-size','11px').attr('fill','#f0f6fc').attr('font-weight','600')
+      .text(lines[0]);
+  } else {
+    lines.forEach((line, i) => {
+      g.append('text').attr('text-anchor','middle')
+        .attr('y', (i - (lines.length-1)/2) * 14)
+        .attr('dominant-baseline','middle')
+        .attr('font-size','10px').attr('fill','#f0f6fc').attr('font-weight','600')
+        .text(line);
+    });
+  }
+});
+
+// Kind badge
+nodeGroups.append('text')
+  .attr('text-anchor','middle').attr('y', NODE_H/2 - 4)
+  .attr('font-size','8px')
+  .attr('fill', d => LAYERS.find(l=>l.id===d.layer).color)
+  .text(d => d.kind);
+
+// Tooltip
+const tooltip = document.getElementById('tooltip');
+
+nodeGroups.on('mouseover', function(event, d) {
+  const layer = LAYERS.find(l=>l.id===d.layer);
+  tooltip.style.display = 'block';
+  tooltip.innerHTML = `
+    <div class="tooltip-title">${d.label.replace('\n',' ')}</div>
+    <div class="tooltip-row">Kind: <span>${d.kind}</span></div>
+    <div class="tooltip-row">Layer: <span style="color:${layer.color}">${layer.label}</span></div>
+    <div class="tooltip-row" style="margin-top:5px">${d.desc}</div>
+  `;
+}).on('mousemove', function(event) {
+  tooltip.style.left = (event.clientX + 14) + 'px';
+  tooltip.style.top  = (event.clientY - 10) + 'px';
+}).on('mouseout', function() {
+  tooltip.style.display = 'none';
+});
+
+// Click-to-isolate
+let isolated = null;
+nodeGroups.on('click', function(event, d) {
+  if (isolated === d.id) {
+    isolated = null;
+    nodeGroups.attr('opacity', 1);
+    edgePaths.attr('opacity', 0.6);
+    return;
+  }
+  isolated = d.id;
+  const connected = new Set([d.id]);
+  EDGES.forEach(e => {
+    if (e.s === d.id) connected.add(e.t);
+    if (e.t === d.id) connected.add(e.s);
+  });
+  nodeGroups.attr('opacity', n => connected.has(n.id) ? 1 : 0.1);
+  edgePaths.attr('opacity', e => (e.s === d.id || e.t === d.id) ? 1 : 0.05);
+});
+
+// Filter buttons
+document.querySelectorAll('.filter-btn').forEach(btn => {
+  const c = LAYERS.find(l=>l.id===btn.dataset.layer);
+  if (c) { btn.style.borderColor = c.color; }
+  btn.addEventListener('click', () => {
+    isolated = null;
+    document.querySelectorAll('.filter-btn').forEach(b => {
+      b.classList.remove('active');
+      b.style.background = '#21262d'; b.style.color = '#8b949e';
+    });
+    btn.classList.add('active');
+    const layer = btn.dataset.layer;
+    if (layer === 'all') {
+      btn.style.background = '#30363d'; btn.style.color = '#f0f6fc';
+      nodeGroups.attr('opacity', 1);
+      edgePaths.attr('opacity', 0.6);
+    } else {
+      btn.style.background = c.bg; btn.style.color = c.color;
+      const visible = new Set(NODES.filter(n=>n.layer===layer).map(n=>n.id));
+      EDGES.forEach(e => { if(visible.has(e.s)) visible.add(e.t); });
+      nodeGroups.attr('opacity', n => visible.has(n.id) ? 1 : 0.07);
+      edgePaths.attr('opacity', e => (nodeMap[e.s]?.layer===layer||nodeMap[e.t]?.layer===layer) ? 0.8 : 0.05);
+    }
+  });
+});
+
+document.getElementById('reset-btn').addEventListener('click', () => {
+  svg.transition().duration(400).call(zoom.transform, d3.zoomIdentity);
+});
+</script>
+</body>
+</html>
