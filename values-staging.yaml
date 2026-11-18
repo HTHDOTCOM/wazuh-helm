@@ -1,8 +1,6 @@
 # Staging environment overrides
 # Applied on top of values.yaml by ArgoCD
 
-env: staging
-
 indexer:
   cred:
     existingSecret: indexer-cred
