@@ -867,6 +867,18 @@ wazuh:
         enabled: true
         value: 1h
       afterRegistrationTime: 1h
+  ## TLS certificates for agent communication channels (5.0+, issued by cert-manager).
+  ## remoted: used on port 1514 (agent event/syslog channel).
+  ## authd: used on port 1515 (classic enrollment) and port 1517 (HTTPS enrollment).
+  ## Both are gated on certificates.enabled; set to false if you manage these secrets manually.
+  ## @param wazuh.remoted.certificate.enabled Issue remoted-tls via cert-manager (requires certificates.enabled).
+  remoted:
+    certificate:
+      enabled: true
+  ## @param wazuh.authd.certificate.enabled Issue authd-tls via cert-manager (requires certificates.enabled).
+  authdCert:
+    certificate:
+      enabled: true
   ## @param wazuh.initContainer.image Image used by the update-index container
   ## @param wazuh.initContainer.resources.requests.cpu Minimum CPU assigned to the pod.
   ## @param wazuh.initContainer.resources.requests.memory Minimum memory assigned to the pod.

@@ -39,6 +39,10 @@ spec:
         checksum/cluster-key-secret: {{ include (print $.Template.BasePath "/manager/secret-cluster-key.yaml") . | sha256sum }}
         {{- end }}
         checksum/api-secret: {{ include (print $.Template.BasePath "/manager/secret-api-cred.yaml") . | sha256sum }}
+        {{- if .Values.certificates.enabled }}
+        checksum/remoted-certificate: {{ include (print $.Template.BasePath "/certs/remoted/certificate.yaml") . | sha256sum }}
+        checksum/authd-certificate: {{ include (print $.Template.BasePath "/certs/authd/certificate.yaml") . | sha256sum }}
+        {{- end }}
         {{- end }}
         {{- with .Values.wazuh.master.annotations }}
             {{- toYaml . | nindent 8 }}
@@ -72,6 +76,14 @@ spec:
           configMap:
             name: {{ template "wazuh.fullname" . }}-manager-config
             defaultMode: {{ default "0500" .Values.wazuh.master.configVolume.defaultMode }}
+        {{- if .Values.certificates.enabled }}
+        - name: remoted-certs
+          secret:
+            secretName: remoted-tls
+        - name: authd-certs
+          secret:
+            secretName: authd-tls
+        {{- end }}
         {{- if include "wazuh.api.certificate.enabled" . }}
         - name: api-certs
           secret:
@@ -162,6 +174,34 @@ spec:
               name: config
               readOnly: true
               subPath: internal_options.conf
+            {{- if .Values.certificates.enabled }}
+            # Remoted TLS (port 1514 — agent event channel)
+            - mountPath: /etc/wazuh-manager/ssl/remoted/ca.crt
+              name: remoted-certs
+              readOnly: true
+              subPath: ca.crt
+            - mountPath: /etc/wazuh-manager/ssl/remoted/tls.crt
+              name: remoted-certs
+              readOnly: true
+              subPath: tls.crt
+            - mountPath: /etc/wazuh-manager/ssl/remoted/tls.key
+              name: remoted-certs
+              readOnly: true
+              subPath: tls.key
+            # Authd TLS (port 1515 / 1517 — agent enrollment)
+            - mountPath: /etc/wazuh-manager/ssl/authd/ca.crt
+              name: authd-certs
+              readOnly: true
+              subPath: ca.crt
+            - mountPath: /etc/wazuh-manager/ssl/authd/tls.crt
+              name: authd-certs
+              readOnly: true
+              subPath: tls.crt
+            - mountPath: /etc/wazuh-manager/ssl/authd/tls.key
+              name: authd-certs
+              readOnly: true
+              subPath: tls.key
+            {{- end }}
             {{- if include "wazuh.api.certificate.enabled" . }}
             # API server certificate (cert-manager), copied over the image's self-signed one on start
             - mountPath: /wazuh-config-mount/api/configuration/ssl/server.crt
