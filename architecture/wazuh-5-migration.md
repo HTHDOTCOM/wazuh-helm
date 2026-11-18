@@ -25,16 +25,16 @@ Status legend: `[ ]` todo · `[x]` done · `[~]` stub only (needs GA image verif
 
 ## Phase 2 — New TLS Certificates (remoted + authd)
 
-- [ ] **2.1** Create `charts/wazuh/templates/certs/remoted/` directory and `certificate.yaml`  
+- [x] **2.1** Create `charts/wazuh/templates/certs/remoted/` directory and `certificate.yaml`  
   Issues `remoted-tls` Secret — used by port 1514 (agent syslog/event channel)
-- [ ] **2.2** Create `charts/wazuh/templates/certs/authd/` directory and `certificate.yaml`  
+- [x] **2.2** Create `charts/wazuh/templates/certs/authd/` directory and `certificate.yaml`  
   Issues `authd-tls` Secret — used by ports 1515 (authd) and 1517 (HTTPS enrollment)
-- [ ] **2.3** `manager/master/statefulset.yaml` — add `remoted-certs` and `authd-certs` volumes
-- [ ] **2.4** `manager/master/statefulset.yaml` — add remoted + authd volumeMounts under `/etc/wazuh-manager/ssl/`
-- [ ] **2.5** `manager/worker/statefulset.yaml` — same volumes + mounts
-- [ ] **2.6** `manager/master/statefulset.yaml` — add autoreload checksums for new cert secrets
-- [ ] **2.7** `manager/worker/statefulset.yaml` — same autoreload checksums
-- [ ] **2.8** `values.yaml` — add `wazuh.remoted.certificate` and `wazuh.authd.certificate` cert config blocks
+- [x] **2.3** `manager/master/statefulset.yaml` — add `remoted-certs` and `authd-certs` volumes
+- [x] **2.4** `manager/master/statefulset.yaml` — add remoted + authd volumeMounts under `/etc/wazuh-manager/ssl/`
+- [x] **2.5** `manager/worker/statefulset.yaml` — same volumes + mounts
+- [x] **2.6** `manager/master/statefulset.yaml` — add autoreload checksums for new cert secrets
+- [x] **2.7** `manager/worker/statefulset.yaml` — same autoreload checksums
+- [x] **2.8** `values.yaml` — add `wazuh.remoted.certificate` and `wazuh.authdCert.certificate` cert config blocks
 
 ---
 

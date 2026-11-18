@@ -55,6 +55,7 @@
     <check_ports>yes</check_ports>
     <check_if>yes</check_if>
     <frequency>43200</frequency>
+    <!-- TODO(5.0): verify rootcheck file paths in 5.0 image (may move to /etc/wazuh-manager/) -->
     <rootkit_files>/var/ossec/etc/rootcheck/rootkit_files.txt</rootkit_files>
     <rootkit_trojans>/var/ossec/etc/rootcheck/rootkit_trojans.txt</rootkit_trojans>
     <system_audit>/var/ossec/etc/rootcheck/system_audit_rcl.txt</system_audit>
@@ -280,8 +281,8 @@
     <use_password>yes</use_password>
     <ciphers>HIGH:!ADH:!EXP:!MD5:!RC4:!3DES:!CAMELLIA:@STRENGTH</ciphers>
     <ssl_verify_host>no</ssl_verify_host>
-    <ssl_manager_cert>/var/ossec/etc/sslmanager.cert</ssl_manager_cert>
-    <ssl_manager_key>/var/ossec/etc/sslmanager.key</ssl_manager_key>
+    <ssl_manager_cert>/etc/wazuh-manager/ssl/authd/tls.crt</ssl_manager_cert>
+    <ssl_manager_key>/etc/wazuh-manager/ssl/authd/tls.key</ssl_manager_key>
     <ssl_auto_negotiate>no</ssl_auto_negotiate>
   </auth>
 
@@ -307,6 +308,7 @@
 
   <localfile>
     <log_format>syslog</log_format>
+    <!-- TODO(5.0): verify active-responses.log path in 5.0 image -->
     <location>/var/ossec/logs/active-responses.log</location>
   </localfile>
 

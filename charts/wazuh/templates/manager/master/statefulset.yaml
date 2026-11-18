@@ -227,7 +227,8 @@ spec:
               name: config
               readOnly: true
               subPath: local_rules.xml
-            # PVC
+            # PVC — TODO(5.0): verify mount paths after booting wazuh-manager:5.0.0 image
+            # In 5.0 config dir moves to /etc/wazuh-manager; data/logs dirs may move to /var/wazuh
             - name: {{ include "wazuh.fullname" . }}-manager-master
               mountPath: /var/ossec/api/configuration
               subPath: wazuh/var/ossec/api/configuration
