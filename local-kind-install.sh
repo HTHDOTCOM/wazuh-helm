@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # local-kind-install.sh — spin up Wazuh 5.0 on a local kind cluster
+# Works with a single-node cluster (control-plane only) or multi-node.
 # Run from the repo root: bash local-kind-install.sh
 set -euo pipefail
 
@@ -22,20 +23,30 @@ done
 if kind get clusters 2>/dev/null | grep -q "^${CLUSTER}$"; then
   warn "kind cluster '${CLUSTER}' already exists — skipping create"
 else
-  info "Creating kind cluster '${CLUSTER}' (control-plane + 2 workers)..."
+  info "Creating kind cluster '${CLUSTER}'..."
   cat <<EOF | kind create cluster --name "$CLUSTER" --config=-
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 nodes:
   - role: control-plane
-  - role: worker
-  - role: worker
 EOF
 fi
 
 kubectl config use-context "kind-${CLUSTER}"
 
-# ── 2. cert-manager ───────────────────────────────────────────────────
+# ── 2. wait for node Ready ────────────────────────────────────────────
+info "Waiting for node to be Ready..."
+kubectl wait node --all --for=condition=Ready --timeout=120s
+
+# ── 3. remove control-plane NoSchedule taint (single-node) ───────────
+NODE_COUNT=$(kubectl get nodes --no-headers | wc -l)
+if [[ "$NODE_COUNT" -eq 1 ]]; then
+  info "Single-node cluster — removing control-plane NoSchedule taint..."
+  kubectl taint node kind-control-plane \
+    node-role.kubernetes.io/control-plane:NoSchedule- 2>/dev/null || true
+fi
+
+# ── 4. cert-manager ───────────────────────────────────────────────────
 if kubectl get ns cert-manager &>/dev/null; then
   warn "cert-manager namespace already exists — skipping install"
 else
@@ -45,10 +56,10 @@ else
   kubectl -n cert-manager wait --for=condition=Available deployment --all --timeout=120s
 fi
 
-# ── 3. namespace ──────────────────────────────────────────────────────
+# ── 5. namespace ──────────────────────────────────────────────────────
 kubectl get ns "$NS" &>/dev/null || kubectl create ns "$NS"
 
-# ── 4. passwords & cluster key ────────────────────────────────────────
+# ── 6. passwords & cluster key ────────────────────────────────────────
 info "Generating credentials..."
 INDEXER_PASS="${INDEXER_PASS:-ChangeMeIndexer1!}"
 DASHBOARD_PASS="${DASHBOARD_PASS:-ChangeMeDash1!}"
@@ -66,7 +77,15 @@ if [[ "$INDEXER_HASH" != '$2'* ]]; then
 fi
 info "Hash OK: ${INDEXER_HASH:0:10}..."
 
-# ── 5. helm install ───────────────────────────────────────────────────
+# ── 7. detect single-node and set anti-affinity flag ─────────────────
+NODE_COUNT=$(kubectl get nodes --no-headers | wc -l)
+EXTRA_FLAGS=()
+if [[ "$NODE_COUNT" -eq 1 ]]; then
+  warn "Single-node cluster — disabling podAntiAffinity for manager workers"
+  EXTRA_FLAGS+=(--set wazuh.worker.podAntiAffinity="")
+fi
+
+# ── 8. helm install ───────────────────────────────────────────────────
 info "Installing Wazuh chart from ${REPO_ROOT}/charts/wazuh ..."
 helm upgrade --install wazuh "${REPO_ROOT}/charts/wazuh" \
   --namespace "$NS" \
@@ -82,10 +101,11 @@ helm upgrade --install wazuh "${REPO_ROOT}/charts/wazuh" \
   --set "indexer.config.internalUsers.wazuh-server.reserved=true" \
   --set "indexer.config.internalUsers.wazuh-server.backend_roles={admin}" \
   --set agent.enabled=false \
-  --timeout 10m \
-  --wait
+  --timeout 15m \
+  --wait \
+  "${EXTRA_FLAGS[@]}"
 
-# ── 6. verify ─────────────────────────────────────────────────────────
+# ── 9. verify ─────────────────────────────────────────────────────────
 info "Pods:"
 kubectl -n "$NS" get pods
 
