@@ -129,7 +129,7 @@ indexer:
     repository: wazuh/wazuh-indexer
     ## @param indexer.images.tag Tag of the image.
     ## @param indexer.images.pullPolicy pullPolicy of the image.
-    tag: "4.14.10"
+    tag: "5.0.0"
     pullPolicy: IfNotPresent
     ## @param indexer.images.imagePullSecrets.enabled Enable pulling image using secret.
     ## @param indexer.images.imagePullSecrets.secret Map of secret names to authenticate.
@@ -441,7 +441,7 @@ dashboard:
   ## @param dashboard.images.updateStrategy updateStrategy of the image.
   images:
     repository: wazuh/wazuh-dashboard
-    tag: "4.14.10"
+    tag: "5.0.0"
     pullPolicy: IfNotPresent
     updateStrategy: OnDelete
   ## @param dashboard.resources.requests.cpu Minimum CPU assigned to the pod.
@@ -746,7 +746,7 @@ wazuh:
   ## @param wazuh.images.imagePullSecrets.secret Map of secret names to authenticate.
   images:
     repository: wazuh/wazuh-manager
-    tag: "4.14.10"
+    tag: "5.0.0"
     pullPolicy: IfNotPresent
     imagePullSecrets:
       enabled: false
@@ -993,6 +993,10 @@ wazuh:
           protocol: TCP
           port: 1515
           targetPort: 1515
+        - name: enrollment-https
+          protocol: TCP
+          port: 1517
+          targetPort: 1517
         - name: api
           protocol: TCP
           port: 55000

@@ -2,34 +2,30 @@ apiVersion: v2
 name: wazuh
 description: Wazuh is a free and open source security platform that unifies XDR and SIEM protection for endpoints and cloud workloads.
 type: application
-appVersion: 4.14.10
-version: 2.5.5
+appVersion: 5.0.0
+version: 3.0.0
 annotations:
   artifacthub.io/prerelease: "false"
   artifacthub.io/category: security
   artifacthub.io/changes: |
-    - kind: fixed
-      description: "Accept dashboard Service labels in the values schema and render a valid Service with the default empty labels map"
     - kind: changed
-      description: "Update Wazuh manager, indexer and dashboard images to 4.14.10"
-    - kind: fixed
-      description: "Include the rule-tree memory settings required by Wazuh 4.14.10 in the bundled internal_options.conf"
+      description: "Wazuh 5.0.0 — major architectural update (breaking change, chart 3.0.0)"
+    - kind: removed
+      description: "Remove Filebeat sidecar from manager StatefulSets; 5.0 ships no Filebeat"
+    - kind: removed
+      description: "Remove filebeat-tls cert-manager Certificate and all filebeat env vars from managers"
     - kind: added
-      description: "indexer.config.internalUsersExistingSecret mounts an external internal_users.yml in the indexer and securityadmin Job without render-time Secret lookups"
+      description: "Add remoted-tls cert-manager Certificate for port 1514 agent event channel"
+    - kind: added
+      description: "Add authd-tls cert-manager Certificate for ports 1515 and 1517 agent enrollment"
+    - kind: added
+      description: "Add port 1517 (enrollment-https) to manager master Service for HTTPS agent enrollment"
     - kind: changed
-      description: "The securityadmin Job is named <fullname>-indexer-securityadmin: the VPC CNI network policy agent keys policies by pod-name prefix, so its pods ran under the indexer StatefulSet's NetworkPolicy"
+      description: "indexer-cred INDEXER_USERNAME default changed from admin to wazuh-server"
     - kind: added
-      description: "wazuh.api.gateway.backendTLS.options passes spec.options to the BackendTLSPolicy (e.g. a minimum TLS version: the API only negotiates CBC ciphers on TLS 1.2)"
-    - kind: added
-      description: "wazuh.api.certificate issues the manager API server certificate with cert-manager (Secret api-tls) instead of the image's self-signed one"
-    - kind: added
-      description: "wazuh.api.gateway exposes the API through Gateway API resources (HTTPRoute, ListenerSet, edge Certificate, BackendTLSPolicy), like dashboard.gateway"
-    - kind: added
-      description: "wazuh.clusterKey.existingSecret reads the manager cluster key from an existing Secret instead of wazuh.key"
+      description: "Add wazuh-server internal user to indexer securityconfig for manager→indexer auth"
     - kind: changed
-      description: "With autoreload.enabled, a change of wazuh.key rolls both manager StatefulSets (checksum of the chart-managed cluster key Secret)"
-    - kind: changed
-      description: "ossec.conf carries the to_be_replaced_by_cluster_key placeholder, filled from WAZUH_CLUSTER_KEY by the manager image on start, so the key no longer appears in the ConfigMap"
+      description: "ossec.conf auth ssl_manager_cert/key now references mounted authd-tls cert"
   artifacthub.io/links: |
     - name: application source
       url: https://github.com/wazuh/wazuh

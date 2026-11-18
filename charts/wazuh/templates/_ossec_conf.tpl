@@ -44,6 +44,25 @@
   {{- end }}
 {{- end }}
 
+{{- if eq $type "master" }}
+{{- range $root.Values.wazuh.master.service.ports }}
+  {{- if eq .name "enrollment-https" }}
+  <!-- HTTPS agent enrollment (5.0+, port 1517) -->
+  <remote>
+    <connection>secure</connection>
+    <port>{{ .port }}</port>
+    <protocol>tcp</protocol>
+{{- if ((($root.Values.global).dualStack).enabled | default false) }}
+    <local_ip>::</local_ip>
+    <ipv6>yes</ipv6>
+{{- else }}
+    <local_ip>0.0.0.0</local_ip>
+{{- end }}
+  </remote>
+  {{- end }}
+{{- end }}
+{{- end }}
+
   <rootcheck>
     <disabled>no</disabled>
     <check_unixaudit>yes</check_unixaudit>
