@@ -2,9 +2,9 @@
 # Edit at https://www.toptal.com/developers/gitignore?templates=helm
 
 ### Helm ###
-# Chart dependencies
-**/charts/*.tgz
-**/Chart.lock
+# Chart dependencies — tarballs are committed so ArgoCD can vendor them
+# **/charts/*.tgz   — committed for ArgoCD dependency resolution
+# **/Chart.lock     — committed for ArgoCD dependency resolution
 **/wazuh-*.tgz
 
 # VSCode
