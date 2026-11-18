@@ -1,0 +1,95 @@
+# Staging environment overrides
+# Applied on top of values.yaml by ArgoCD
+
+env: staging
+
+indexer:
+  cred:
+    existingSecret: indexer-cred
+    passwordHash: "$2b$12$h6S6YYWK.lbUdckz7YAbyuWdAxfT26EmzFNgpVVIxmMaPCvE1tKvG"
+  replicas: 1
+  resources:
+    requests:
+      cpu: 300m
+      memory: 512Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+  storageSize: 10Gi
+  env:
+    OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m -Dlog4j2.formatMsgNoLookups=true"
+
+dashboard:
+  cred:
+    existingSecret: dashboard-cred
+    passwordHash: "$2b$12$FGdXsEFCQklsEhjt84kO/OHMGqJnfQoTUugwiEtp3zWZx6Iuyp4CW"
+  replicas: 1
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  ingress:
+    enabled: true
+    className: "nginx"
+    host: "wazuh-staging-version5.cluster000.wkr-t.k8s.cloud.uibk.ac.at"
+    annotations:
+      cert.gardener.cloud/purpose: managed
+      dns.gardener.cloud/class: garden
+      dns.gardener.cloud/dnsnames: "wazuh-staging-version5.cluster000.wkr-t.k8s.cloud.uibk.ac.at"
+      dns.gardener.cloud/ttl: "180"
+      nginx.ingress.kubernetes.io/backend-protocol: HTTP
+      nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    tls:
+      - hosts:
+          - wazuh-staging-version5.cluster000.wkr-t.k8s.cloud.uibk.ac.at
+        secretName: wazuh-staging-dashboard-tls
+
+agent:
+  joinManager:
+    # Master service is hardcoded as "wazuh" (not release-name) due to cert commonName
+    managerHost: "wazuh.c1023447-wazuh-staging.svc.cluster.local"
+
+wazuh:
+  loadBalancer:
+    enabled: true
+  master:
+    networkPolicy:
+      extraIngresses:
+        # Allow external agents/VMs to reach remoted (1514), authd (1515),
+        # HTTPS enrollment (1517, new in 5.0), and API (55000) via LoadBalancer
+        - ports:
+            - port: 1514
+              protocol: TCP
+            - port: 1515
+              protocol: TCP
+            - port: 1517
+              protocol: TCP
+            - port: 55000
+              protocol: TCP
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+    storageSize: 10Gi
+  apiCred:
+    existingSecret: wazuh-api-cred
+  authd:
+    existingSecret: wazuh-authd-pass
+  clusterKey:
+    existingSecret: wazuh-cluster-key
+  worker:
+    replicas: 1
+    resources:
+      requests:
+        cpu: 250m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    storageSize: 10Gi
