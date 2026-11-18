@@ -116,10 +116,11 @@
     </hosts>
     <ssl>
       <certificate_authorities>
-        <ca>/etc/ssl/root-ca.pem</ca>
+        <ca>/etc/wazuh-manager/ssl/ca.crt</ca>
       </certificate_authorities>
-      <certificate>/etc/ssl/filebeat.pem</certificate>
-      <key>/etc/ssl/filebeat.key</key>
+      <!-- TODO(5.0): verify cert path; mount node-tls or dedicated manager cert -->
+      <certificate>/etc/wazuh-manager/ssl/tls.crt</certificate>
+      <key>/etc/wazuh-manager/ssl/tls.key</key>
     </ssl>
   </indexer>
 

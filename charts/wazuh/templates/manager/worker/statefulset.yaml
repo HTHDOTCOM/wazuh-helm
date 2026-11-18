@@ -32,7 +32,6 @@ spec:
       annotations:
         {{- if .Values.autoreload.enabled }}
         checksum/configmap: {{ include (print $.Template.BasePath "/manager/configmap.yaml") . | sha256sum }}
-        checksum/filebeat-certificate: {{ include (print $.Template.BasePath "/certs/filebeat/certificate.yaml") . | sha256sum }}
         checksum/indexer-secret: {{ include (print $.Template.BasePath "/indexer/secret.yaml") . | sha256sum }}
         {{- if not (include "wazuh.clusterKey.existingSecret" .) }}
         checksum/cluster-key-secret: {{ include (print $.Template.BasePath "/manager/secret-cluster-key.yaml") . | sha256sum }}
@@ -89,9 +88,6 @@ spec:
           configMap:
             name: {{ include "wazuh.fullname" . }}-manager-config
             defaultMode: {{ default "0500" .Values.wazuh.worker.configVolume.defaultMode }}
-        - name: filebeat-certs
-          secret:
-            secretName: filebeat-tls
         {{- if include "wazuh.api.certificate.enabled" . }}
         - name: api-certs
           secret:
@@ -179,19 +175,6 @@ spec:
               name: config
               readOnly: true
               subPath: internal_options.conf
-            # Certs
-            - mountPath: /etc/ssl/root-ca.pem
-              name: filebeat-certs
-              readOnly: true
-              subPath: ca.crt
-            - mountPath: /etc/ssl/filebeat.pem
-              name: filebeat-certs
-              readOnly: true
-              subPath: tls.crt
-            - mountPath: /etc/ssl/filebeat.key
-              name: filebeat-certs
-              readOnly: true
-              subPath: tls.key
             {{- if include "wazuh.api.certificate.enabled" . }}
             # API server certificate (cert-manager), copied over the image's self-signed one on start
             - mountPath: /wazuh-config-mount/api/configuration/ssl/server.crt
@@ -202,12 +185,6 @@ spec:
               name: api-certs
               readOnly: true
               subPath: tls.key
-            {{- end }}
-            {{- if include "wazuh.filebeat.overridden" . }}
-            - mountPath: /var/ossec/data_tmp/exclusion/etc/filebeat/filebeat.yml
-              name: config
-              readOnly: true
-              subPath: filebeat.yml
             {{- end }}
             # PVC
             - name: {{ include "wazuh.fullname" . }}-manager-worker
@@ -237,12 +214,6 @@ spec:
             - name: {{ include "wazuh.fullname" . }}-manager-worker
               mountPath: /var/ossec/wodles
               subPath: wazuh/var/ossec/wodles
-            - name: {{ include "wazuh.fullname" . }}-manager-worker
-              mountPath: /etc/filebeat
-              subPath: filebeat/etc/filebeat
-            - name: {{ include "wazuh.fullname" . }}-manager-worker
-              mountPath: /var/lib/filebeat
-              subPath: filebeat/var/lib/filebeat
             {{- with .Values.wazuh.worker.additionalVolumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -274,20 +245,11 @@ spec:
                      {{- else }}
                        "{{ .Values.externalIndexer.host }}:{{ .Values.externalIndexer.port }}"
                      {{- end }}
-            - name: FILEBEAT_SSL_VERIFICATION_MODE
-              value: {{ .Values.wazuh.env.FILEBEAT_SSL_VERIFICATION_MODE | quote }}
             - name: WAZUH_CLUSTER_KEY
               valueFrom:
                 secretKeyRef:
                   name: {{ include "wazuh.clusterKey.secretName" . | quote }}
                   key: {{ include "wazuh.clusterKey.secretKey" . | quote }}
-            # Certs
-            - name: SSL_CERTIFICATE_AUTHORITIES
-              value: /etc/ssl/root-ca.pem
-            - name: SSL_CERTIFICATE
-              value: /etc/ssl/filebeat.pem
-            - name: SSL_KEY
-              value: /etc/ssl/filebeat.key
           {{- with .Values.wazuh.worker.additionalEnv }}
             {{- toYaml . | nindent 12 }}
           {{- end }}

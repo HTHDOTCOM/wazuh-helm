@@ -1692,26 +1692,8 @@
         "enabled": {
           "type": "boolean"
         },
-        "env": {
-          "type": "object",
-          "properties": {
-            "FILEBEAT_SSL_VERIFICATION_MODE": {
-              "type": "string"
-            }
-          },
-          "additionalProperties": false
-        },
         "extraInitContainers": {
           "type": "array"
-        },
-        "filebeat": {
-          "type": "object",
-          "properties": {
-            "config": {
-              "type": "string"
-            }
-          },
-          "additionalProperties": false
         },
         "images": {
           "type": "object",

@@ -723,9 +723,8 @@ wazuh:
       - any
     networkPolicyFrom: [] # @schema item: object; itemProperties: {podSelector: {type: object, additionalProperties: true}, namespaceSelector: {type: object, additionalProperties: true}, ipBlock: {type: object, additionalProperties: true}}
   ## Without this only alerts are indexed, so events matching no rule are dropped. Sets
-  ## <logall_json> on the managers and enables filebeat's archives fileset; both are needed,
-  ## so it is one switch. Archives are unfiltered, expect much more indexer storage.
-  ## Does not apply to a file replaced by masterConf, workerConf or filebeat.config.
+  ## <logall_json> on the managers. Archives are unfiltered, expect much more indexer storage.
+  ## Does not apply to a file replaced by masterConf or workerConf.
   ## @param wazuh.archives.enabled Index every event, not just alerts.
   archives:
     enabled: false
@@ -774,9 +773,6 @@ wazuh:
     port: 1516
   ## @param wazuh.nodeSelector nodeSelector
   nodeSelector: {} # @schema additionalProperties: true; skipProperties: true
-  ## @skip wazuh.env
-  env:
-    FILEBEAT_SSL_VERIFICATION_MODE: full
   ## @param wazuh.apiCred.existingSecret name of the existingSecret
   ## @param wazuh.apiCred.username name of the username.
   ## @param wazuh.apiCred.password password of the user.
@@ -932,12 +928,6 @@ wazuh:
     affinity: {} # @schema additionalProperties: true; skipProperties: true
   ## @param wazuh.internalOptions Override for internal_options.conf. If empty, files/internal_options.conf is used.
   internalOptions: ""
-  ## Replaces the whole file. Keep the `hosts:` line and the commented-out `#username:`,
-  ## `#password:` and `#ssl.*` keys: the entrypoint fills those in from the env vars, and
-  ## ships nothing without them. wazuh.archives.enabled does not apply, set archives here.
-  ## @param wazuh.filebeat.config Override for filebeat.yml. If empty, the generated config is used.
-  filebeat:
-    config: ""
   ## @skip wazuh.agentGroupConf
   agentGroupConf:
     - name: example
