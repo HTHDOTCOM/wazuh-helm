@@ -93,21 +93,22 @@ Status legend: `[ ]` todo · `[x]` done · `[~]` stub only (needs GA image verif
 
 ## Phase 8 — values.yaml + Schema Cleanup
 
-- [ ] **8.1** `values.yaml` — add new certificate config blocks (remoted, authd) with comments
-- [ ] **8.2** `values.yaml` — remove filebeat section
-- [ ] **8.3** `values.schema.json` — regenerate/update schema to match all value changes
-- [ ] **8.4** Run `helm lint charts/wazuh` and fix any warnings
+- [x] **8.1** `values.yaml` — add new certificate config blocks (remoted, authd) with comments
+- [x] **8.2** `values.yaml` — remove filebeat section
+- [x] **8.3** `values.schema.json` — regenerate/update schema to match all value changes
+- [~] **8.4** Run `helm lint charts/wazuh` and fix any warnings  
+  *(helm not available in this environment — run locally before merge)*
 
 ---
 
 ## Phase 9 — Documentation Updates
 
-- [ ] **9.1** `architecture/overview.md` — update architecture overview section for 5.0 (no Filebeat, new ports, new TLS)
-- [ ] **9.2** `architecture/architecture.md` — update ASCII diagrams (remove Filebeat from pods, add port 1517)
-- [ ] **9.3** `architecture/values-guide.md` — remove filebeat section, add remoted/authd cert sections, update image tags
-- [ ] **9.4** `architecture/runbooks/credential-rotation.md` — update `admin` → `wazuh-server` throughout
-- [ ] **9.5** `architecture/graph.html` — update D3 diagram nodes: remove filebeat node, add remoted-tls/authd-tls cert nodes, add port 1517 edge
-- [ ] **9.6** `architecture/index.html` — update version chips (chart 3.0.0, app 5.0.0)
+- [x] **9.1** `architecture/overview.md` — update architecture overview section for 5.0 (no Filebeat, new ports, new TLS)
+- [x] **9.2** `architecture/architecture.md` — update ASCII diagrams (remove Filebeat from pods, add port 1517)
+- [x] **9.3** `architecture/values-guide.md` — remove filebeat section, add remoted/authd cert sections, update image tags
+- [x] **9.4** `architecture/runbooks/credential-rotation.md` — update `admin` → `wazuh-server` throughout
+- [x] **9.5** `architecture/graph.html` — update D3 diagram nodes: remove filebeat node, add remoted-tls/authd-tls cert nodes, add port 1517 edge
+- [x] **9.6** `architecture/index.html` — update version chips (chart 3.0.0, app 5.0.0)
 
 ---
 
@@ -128,4 +129,4 @@ Phases are designed to be done in order. Each phase is independent enough to com
 Phases 1–8 can be done without any 5.0 images.  
 Phase 10 requires GA images and a real cluster.
 
-**Current progress**: Phases 1–7 complete (commit `56a15c1`). Next: Phase 8 — schema cleanup, then Phase 9 — docs.
+**Current progress**: Phases 1–9 complete (commit `6fc055e`). Phase 8.4 (helm lint) needs to be run locally. Phase 10 requires GA images and a real cluster.
