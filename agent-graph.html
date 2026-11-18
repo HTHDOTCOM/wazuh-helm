@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wazuh Helm Chart Architecture</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --bg2: #161b22;
+    --bg3: #21262d;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text2: #8b949e;
+    --security: #ff6b7a;
+    --indexer: #4a9eff;
+    --dashboard: #a29bfe;
+    --storage: #26de81;
+    --config: #ff9f43;
+    --infra: #74b9ff;
+    --agent: #fd79a8;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; overflow: hidden; }
+
+  #header {
+    padding: 16px 24px 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--bg2);
+    flex-shrink: 0;
+  }
+  #header h1 { font-size: 18px; font-weight: 600; }
+  #header .subtitle { font-size: 12px; color: var(--text2); margin-top: 2px; }
+
+  #controls {
+    display: flex; gap: 8px; align-items: center;
+    padding: 10px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+    flex-wrap: wrap;
+    flex-shrink: 0;
+  }
+  .btn {
+    padding: 5px 12px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--bg3); color: var(--text2); cursor: pointer; font-size: 12px;
+    transition: all 0.2s;
+  }
+  .btn:hover, .btn.active { background: var(--border); color: var(--text); }
+  .btn.active { border-color: #58a6ff; color: #58a6ff; }
+
+  #search {
+    padding: 5px 10px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--bg3); color: var(--text); font-size: 12px; width: 180px;
+    outline: none;
+  }
+  #search:focus { border-color: #58a6ff; }
+
+  #canvas { flex: 1; overflow: hidden; }
+  svg { width: 100%; height: 100%; }
+
+  #layout { display: flex; flex-direction: column; height: 100vh; }
+
+  .lane-label {
+    font-size: 11px; font-weight: 600; fill: var(--text2);
+    text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .lane-bg { fill: rgba(255,255,255,0.015); stroke: var(--border); stroke-width: 1; rx: 8; }
+
+  .node rect {
+    rx: 8; ry: 8;
+    stroke-width: 1.5;
+    transition: opacity 0.25s;
+    cursor: pointer;
+  }
+  .node .accent { rx: 8; ry: 8; }
+  .node text { font-size: 11px; fill: var(--text); pointer-events: none; }
+  .node .type-label { font-size: 9px; fill: var(--text2); }
+  .node.dimmed rect { opacity: 0.15; }
+  .node.dimmed text { opacity: 0.15; }
+  .node.highlighted rect { filter: brightness(1.3); }
+
+  .edge {
+    fill: none; stroke-width: 1.5; opacity: 0.5;
+    transition: opacity 0.25s;
+    marker-end: url(#arrow);
+  }
+  .edge.dimmed { opacity: 0.05; }
+  .edge.highlighted { opacity: 0.9; stroke-width: 2; }
+
+  #tooltip {
+    position: fixed; background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 14px; font-size: 12px; pointer-events: none;
+    max-width: 240px; z-index: 100; display: none; line-height: 1.5;
+  }
+  #tooltip .t-name { font-weight: 600; font-size: 13px; margin-bottom: 4px; }
+  #tooltip .t-row { color: var(--text2); }
+  #tooltip .t-row span { color: var(--text); }
+
+  #legend {
+    position: fixed; bottom: 16px; right: 16px;
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 14px; font-size: 11px;
+    line-height: 1.8;
+  }
+  .legend-item { display: flex; align-items: center; gap: 8px; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+
+  #hint {
+    position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+    font-size: 11px; color: var(--text2); pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<div id="layout">
+  <div id="header">
+    <div>
+      <h1>Wazuh Helm Chart Architecture</h1>
+      <div class="subtitle">v2.5.5 &nbsp;·&nbsp; App v4.14.10 &nbsp;·&nbsp; XDR &amp; SIEM platform on Kubernetes</div>
+    </div>
+  </div>
+  <div id="controls">
+    <span style="font-size:12px;color:var(--text2)">Filter:</span>
+    <button class="btn active" data-layer="all">All</button>
+    <button class="btn" data-layer="access">Ingress / Access</button>
+    <button class="btn" data-layer="core">Core Services</button>
+    <button class="btn" data-layer="storage">Storage</button>
+    <button class="btn" data-layer="certs">Certificates</button>
+    <button class="btn" data-layer="agent">Agent</button>
+    <input id="search" type="text" placeholder="Search components…">
+  </div>
+  <div id="canvas"></div>
+</div>
+
+<div id="tooltip"></div>
+<div id="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:#ff6b7a"></div>Manager / SIEM</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#4a9eff"></div>Indexer / Search</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#a29bfe"></div>Dashboard / UI</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#26de81"></div>Storage / PVC</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#ff9f43"></div>Config / Secrets</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#74b9ff"></div>Infrastructure</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#fd79a8"></div>Agent</div>
+</div>
+<div id="hint">Scroll to zoom &nbsp;·&nbsp; Drag to pan &nbsp;·&nbsp; Click node to isolate</div>
+
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+<script>
+const COLORS = {
+  security: "#ff6b7a",
+  indexer:  "#4a9eff",
+  dashboard:"#a29bfe",
+  storage:  "#26de81",
+  config:   "#ff9f43",
+  infra:    "#74b9ff",
+  agent:    "#fd79a8",
+};
+
+const LANES = [
+  { id: "access",  label: "Ingress / Access",   y: 0 },
+  { id: "core",    label: "Core Services",       y: 1 },
+  { id: "storage", label: "Storage & Config",    y: 2 },
+  { id: "certs",   label: "Certificates & RBAC", y: 3 },
+  { id: "agent",   label: "Agent",               y: 4 },
+];
+
+const NODES = [
+  // Access layer
+  { id: "ingress",         label: "Ingress / HTTPRoute",    type: "Ingress",         layer: "access",  cat: "infra",    desc: "Exposes Dashboard and Manager API externally. Supports both Ingress and Gateway API (HTTPRoute + ListenerSet)." },
+  { id: "loadbalancer",    label: "LoadBalancer Service",   type: "Service",         layer: "access",  cat: "infra",    desc: "Optional LoadBalancer service for direct agent enrollment traffic (1514/1515)." },
+  { id: "api-gateway",     label: "Manager API Gateway",    type: "HTTPRoute",       layer: "access",  cat: "infra",    desc: "Gateway API route exposing the Wazuh Manager REST API (port 55000) with optional BackendTLSPolicy." },
+
+  // Core services
+  { id: "manager-master",  label: "Manager Master",         type: "StatefulSet",     layer: "core",    cat: "security", desc: "Wazuh Manager master node. Coordinates cluster, runs analysis engine, receives logs from agents via Filebeat." },
+  { id: "manager-worker",  label: "Manager Worker(s)",      type: "StatefulSet",     layer: "core",    cat: "security", desc: "Wazuh Manager worker nodes. Scale-out event processing; communicate with master over cluster port 1516." },
+  { id: "indexer",         label: "Wazuh Indexer",          type: "StatefulSet",     layer: "core",    cat: "indexer",  desc: "OpenSearch-based indexer (3 replicas). Stores all security alerts and events. Secured with TLS and internal_users." },
+  { id: "dashboard",       label: "Wazuh Dashboard",        type: "Deployment",      layer: "core",    cat: "dashboard",desc: "OpenSearch Dashboards-based UI. Queries indexer for search and visualizations, proxied through nginx." },
+  { id: "securityadmin",   label: "securityadmin Job",       type: "Job",             layer: "core",    cat: "infra",    desc: "One-time Kubernetes Job that bootstraps indexer security (users, roles, mappings) using securityadmin script." },
+  { id: "ruleset-reload",  label: "Ruleset Reload Job",     type: "Job",             layer: "core",    cat: "infra",    desc: "Job that hot-reloads manager rulesets without restarting pods when autoreload is enabled." },
+
+  // Storage & config
+  { id: "indexer-pvc",     label: "Indexer PVC",            type: "PersistentVolumeClaim", layer: "storage", cat: "storage", desc: "Persistent volumes for Wazuh Indexer data (one per replica via volumeClaimTemplate)." },
+  { id: "manager-pvc",     label: "Manager PVC",            type: "PersistentVolumeClaim", layer: "storage", cat: "storage", desc: "Persistent volumes for manager data: ossec.log, queues, active-response output." },
+  { id: "snapshot-pvc",    label: "Snapshot PVC",           type: "PersistentVolumeClaim", layer: "storage", cat: "storage", desc: "Optional PVC for OpenSearch snapshot repository (index backups)." },
+  { id: "manager-cm",      label: "Manager ConfigMap",      type: "ConfigMap",       layer: "storage", cat: "config",   desc: "Contains ossec.conf, internal_options.conf, local_decoder.xml, local_rules.xml." },
+  { id: "indexer-cm",      label: "Indexer ConfigMap",      type: "ConfigMap",       layer: "storage", cat: "config",   desc: "OpenSearch node config (opensearch.yml), JVM options, log4j2 properties." },
+  { id: "dashboard-cm",    label: "Dashboard ConfigMap",    type: "ConfigMap",       layer: "storage", cat: "config",   desc: "opensearch_dashboards.yml and wazuh.yml plugin configuration." },
+  { id: "secret-cluster",  label: "Cluster Key Secret",     type: "Secret",          layer: "storage", cat: "config",   desc: "Wazuh manager cluster key (WAZUH_CLUSTER_KEY). Injected into manager pods at runtime." },
+  { id: "secret-api",      label: "API Credential Secret",  type: "Secret",          layer: "storage", cat: "config",   desc: "Wazuh API username and password used by dashboard to query the manager API." },
+  { id: "secret-authd",    label: "Authd Pass Secret",      type: "Secret",          layer: "storage", cat: "config",   desc: "Agent registration password (authd). Mounted into manager master." },
+  { id: "secret-secconfig","label": "Security Config Secret", type: "Secret",        layer: "storage", cat: "config",   desc: "OpenSearch internal_users.yml, roles.yml, roles_mapping.yml for indexer bootstrap." },
+  { id: "secret-dash",     label: "Dashboard Secret",       type: "Secret",          layer: "storage", cat: "config",   desc: "Dashboard admin credentials (cookie encryption key, admin password)." },
+
+  // Certs & RBAC
+  { id: "rootca",          label: "Root CA",                type: "Certificate",     layer: "certs",   cat: "infra",    desc: "Self-signed root CA issued by cert-manager. All component TLS certs chain to this." },
+  { id: "cert-node",       label: "Indexer Node Cert",      type: "Certificate",     layer: "certs",   cat: "infra",    desc: "TLS cert for each indexer node (transport and REST)." },
+  { id: "cert-admin",      label: "Admin Cert",             type: "Certificate",     layer: "certs",   cat: "infra",    desc: "Admin client certificate for securityadmin Job to bootstrap indexer security." },
+  { id: "cert-filebeat",   label: "Filebeat Cert",          type: "Certificate",     layer: "certs",   cat: "infra",    desc: "Client certificate for Filebeat inside manager pods to authenticate to indexer." },
+  { id: "cert-dashboard",  label: "Dashboard Cert",         type: "Certificate",     layer: "certs",   cat: "infra",    desc: "TLS cert for the dashboard service (served to browser)." },
+  { id: "cert-api",        label: "Manager API Cert",       type: "Certificate",     layer: "certs",   cat: "infra",    desc: "TLS cert for the manager REST API (port 55000)." },
+  { id: "sa-manager",      label: "Manager ServiceAccount", type: "ServiceAccount",  layer: "certs",   cat: "infra",    desc: "ServiceAccount for manager pods." },
+  { id: "sa-indexer",      label: "Indexer ServiceAccount", type: "ServiceAccount",  layer: "certs",   cat: "infra",    desc: "ServiceAccount for indexer StatefulSet." },
+  { id: "sa-dashboard",    label: "Dashboard ServiceAccount",type: "ServiceAccount", layer: "certs",   cat: "infra",    desc: "ServiceAccount for dashboard Deployment." },
+  { id: "netpol",          label: "NetworkPolicies",        type: "NetworkPolicy",   layer: "certs",   cat: "infra",    desc: "NetworkPolicies for indexer, dashboard, master, and worker. DNS egress configured globally." },
+
+  // Agent
+  { id: "wazuh-agent",     label: "Wazuh Agent DaemonSet",  type: "DaemonSet",       layer: "agent",   cat: "agent",    desc: "Optional DaemonSet that runs the Wazuh agent on every node. Communicates with manager on port 1514." },
+  { id: "agent-cm",        label: "Agent ConfigMap",        type: "ConfigMap",       layer: "agent",   cat: "config",   desc: "ossec.conf for the DaemonSet agent, points to manager master service." },
+  { id: "agent-secret",    label: "Agent API Secret",       type: "Secret",          layer: "agent",   cat: "config",   desc: "API credentials used by the agent DaemonSet to auto-register with the manager." },
+];
+
+const EDGES = [
+  // Access → Core
+  { source: "ingress",        target: "dashboard",      label: "HTTPS :443" },
+  { source: "api-gateway",    target: "manager-master", label: "REST :55000" },
+  { source: "loadbalancer",   target: "manager-master", label: "agent :1514/1515" },
+  { source: "loadbalancer",   target: "manager-worker", label: "agent :1514/1515" },
+
+  // Core internal
+  { source: "manager-worker", target: "manager-master", label: "cluster :1516" },
+  { source: "manager-master", target: "indexer",        label: "Filebeat → index" },
+  { source: "manager-worker", target: "indexer",        label: "Filebeat → index" },
+  { source: "dashboard",      target: "indexer",        label: "query :9200" },
+  { source: "dashboard",      target: "manager-master", label: "API :55000" },
+  { source: "securityadmin",  target: "indexer",        label: "bootstrap security" },
+  { source: "ruleset-reload", target: "manager-master", label: "hot-reload rules" },
+  { source: "ruleset-reload", target: "manager-worker", label: "hot-reload rules" },
+
+  // Storage → Core
+  { source: "manager-cm",     target: "manager-master", label: "mount" },
+  { source: "manager-cm",     target: "manager-worker", label: "mount" },
+  { source: "indexer-cm",     target: "indexer",        label: "mount" },
+  { source: "dashboard-cm",   target: "dashboard",      label: "mount" },
+  { source: "manager-pvc",    target: "manager-master", label: "data" },
+  { source: "manager-pvc",    target: "manager-worker", label: "data" },
+  { source: "indexer-pvc",    target: "indexer",        label: "data" },
+  { source: "snapshot-pvc",   target: "indexer",        label: "snapshots" },
+  { source: "secret-cluster", target: "manager-master", label: "key env" },
+  { source: "secret-cluster", target: "manager-worker", label: "key env" },
+  { source: "secret-api",     target: "dashboard",      label: "API creds" },
+  { source: "secret-api",     target: "securityadmin",  label: "API creds" },
+  { source: "secret-authd",   target: "manager-master", label: "mount" },
+  { source: "secret-secconfig",target:"securityadmin",  label: "security config" },
+  { source: "secret-secconfig",target:"indexer",        label: "users mount" },
+  { source: "secret-dash",    target: "dashboard",      label: "admin secret" },
+
+  // Certs → Core
+  { source: "rootca",         target: "cert-node",      label: "signs" },
+  { source: "rootca",         target: "cert-admin",     label: "signs" },
+  { source: "rootca",         target: "cert-filebeat",  label: "signs" },
+  { source: "rootca",         target: "cert-dashboard", label: "signs" },
+  { source: "rootca",         target: "cert-api",       label: "signs" },
+  { source: "cert-node",      target: "indexer",        label: "TLS" },
+  { source: "cert-filebeat",  target: "manager-master", label: "mount" },
+  { source: "cert-filebeat",  target: "manager-worker", label: "mount" },
+  { source: "cert-admin",     target: "securityadmin",  label: "mount" },
+  { source: "cert-dashboard", target: "dashboard",      label: "TLS" },
+  { source: "cert-api",       target: "manager-master", label: "API TLS" },
+  { source: "netpol",         target: "indexer",        label: "controls" },
+  { source: "netpol",         target: "dashboard",      label: "controls" },
+  { source: "netpol",         target: "manager-master", label: "controls" },
+  { source: "netpol",         target: "manager-worker", label: "controls" },
+
+  // Agent → Core
+  { source: "wazuh-agent",    target: "manager-master", label: "events :1514" },
+  { source: "wazuh-agent",    target: "manager-worker", label: "events :1514" },
+  { source: "agent-cm",       target: "wazuh-agent",    label: "config" },
+  { source: "agent-secret",   target: "wazuh-agent",    label: "API creds" },
+];
+
+// ---- layout ----
+const NODE_W = 150, NODE_H = 48, PAD_X = 20, PAD_Y = 24;
+const LANE_H = 180;
+const CANVAS_W = 1700;
+
+function layoutNodes(nodes) {
+  const byLayer = {};
+  LANES.forEach(l => byLayer[l.id] = []);
+  nodes.forEach(n => { if (byLayer[n.layer]) byLayer[n.layer].push(n); });
+
+  LANES.forEach((lane, li) => {
+    const group = byLayer[lane.id];
+    const totalW = group.length * (NODE_W + PAD_X) - PAD_X;
+    const startX = (CANVAS_W - totalW) / 2;
+    const y = li * LANE_H + PAD_Y + 60;
+    group.forEach((n, i) => {
+      n.x = startX + i * (NODE_W + PAD_X) + NODE_W / 2;
+      n.y = y + NODE_H / 2;
+    });
+  });
+  return nodes;
+}
+
+layoutNodes(NODES);
+
+const totalH = LANES.length * LANE_H + 100;
+
+// ---- render ----
+const container = document.getElementById("canvas");
+const svg = d3.select(container).append("svg")
+  .attr("viewBox", `0 0 ${CANVAS_W} ${totalH}`)
+  .style("background", "#0d1117");
+
+const defs = svg.append("defs");
+defs.append("marker")
+  .attr("id", "arrow")
+  .attr("viewBox", "0 -5 10 10")
+  .attr("refX", 10).attr("refY", 0)
+  .attr("markerWidth", 6).attr("markerHeight", 6)
+  .attr("orient", "auto")
+  .append("path").attr("d", "M0,-5L10,0L0,5").attr("fill", "#58a6ff").attr("opacity", 0.6);
+
+const root = svg.append("g").attr("class", "zoom-root");
+svg.call(d3.zoom().scaleExtent([0.3, 3]).on("zoom", e => root.attr("transform", e.transform)));
+
+// lanes
+LANES.forEach((lane, li) => {
+  const y = li * LANE_H + 30;
+  root.append("rect")
+    .attr("class", "lane-bg")
+    .attr("x", 20).attr("y", y)
+    .attr("width", CANVAS_W - 40).attr("height", LANE_H - 10)
+    .attr("rx", 8);
+  root.append("text")
+    .attr("class", "lane-label")
+    .attr("x", 36).attr("y", y + 20)
+    .text(lane.label);
+});
+
+const nodeById = Object.fromEntries(NODES.map(n => [n.id, n]));
+
+// adjacency
+const neighbors = {};
+NODES.forEach(n => neighbors[n.id] = new Set());
+EDGES.forEach(e => {
+  neighbors[e.source].add(e.target);
+  neighbors[e.target].add(e.source);
+});
+
+// edges
+const edgeSel = root.selectAll(".edge")
+  .data(EDGES)
+  .enter().append("path")
+  .attr("class", "edge")
+  .attr("stroke", d => {
+    const src = nodeById[d.source];
+    return src ? COLORS[src.cat] : "#58a6ff";
+  })
+  .attr("d", d => {
+    const s = nodeById[d.source], t = nodeById[d.target];
+    if (!s || !t) return "";
+    const sx = s.x, sy = s.y, tx = t.x, ty = t.y;
+    const mx = (sx + tx) / 2, my = (sy + ty) / 2;
+    const dx = tx - sx, dy = ty - sy;
+    const nx = -dy * 0.15, ny = dx * 0.15;
+    return `M${sx},${sy} Q${mx + nx},${my + ny} ${tx},${ty}`;
+  });
+
+// nodes
+const tooltip = document.getElementById("tooltip");
+let selected = null;
+
+const nodeSel = root.selectAll(".node")
+  .data(NODES)
+  .enter().append("g")
+  .attr("class", "node")
+  .attr("transform", d => `translate(${d.x - NODE_W/2},${d.y - NODE_H/2})`)
+  .on("mousemove", (evt, d) => {
+    tooltip.style.display = "block";
+    tooltip.style.left = (evt.clientX + 14) + "px";
+    tooltip.style.top = (evt.clientY - 10) + "px";
+    tooltip.innerHTML = `
+      <div class="t-name" style="color:${COLORS[d.cat]}">${d.label}</div>
+      <div class="t-row">Type: <span>${d.type}</span></div>
+      <div class="t-row">Layer: <span>${LANES.find(l=>l.id===d.layer)?.label}</span></div>
+      <div class="t-row" style="margin-top:6px;color:#c9d1d9">${d.desc}</div>
+    `;
+  })
+  .on("mouseleave", () => { tooltip.style.display = "none"; })
+  .on("click", (evt, d) => {
+    evt.stopPropagation();
+    if (selected === d.id) {
+      selected = null;
+      nodeSel.classed("dimmed", false).classed("highlighted", false);
+      edgeSel.classed("dimmed", false).classed("highlighted", false);
+    } else {
+      selected = d.id;
+      const nb = neighbors[d.id];
+      nodeSel.classed("dimmed", n => n.id !== d.id && !nb.has(n.id));
+      nodeSel.classed("highlighted", n => n.id === d.id);
+      edgeSel.classed("dimmed", e => e.source !== d.id && e.target !== d.id);
+      edgeSel.classed("highlighted", e => e.source === d.id || e.target === d.id);
+    }
+  });
+
+svg.on("click", () => {
+  selected = null;
+  nodeSel.classed("dimmed", false).classed("highlighted", false);
+  edgeSel.classed("dimmed", false).classed("highlighted", false);
+});
+
+nodeSel.append("rect")
+  .attr("width", NODE_W).attr("height", NODE_H)
+  .attr("rx", 8).attr("ry", 8)
+  .attr("fill", "#161b22")
+  .attr("stroke", d => COLORS[d.cat])
+  .attr("stroke-opacity", 0.6);
+
+// accent bar
+nodeSel.append("rect")
+  .attr("width", 4).attr("height", NODE_H - 4)
+  .attr("x", 2).attr("y", 2)
+  .attr("rx", 3).attr("ry", 3)
+  .attr("fill", d => COLORS[d.cat]);
+
+nodeSel.append("text")
+  .attr("x", 14).attr("y", 20)
+  .attr("dominant-baseline", "middle")
+  .style("font-size", "11px").style("fill", "#e6edf3").style("font-weight", "500")
+  .text(d => d.label.length > 18 ? d.label.slice(0, 17) + "…" : d.label);
+
+nodeSel.append("text")
+  .attr("class", "type-label")
+  .attr("x", 14).attr("y", 36)
+  .style("font-size", "9px").style("fill", "#8b949e")
+  .text(d => d.type);
+
+// ---- filter buttons ----
+document.querySelectorAll("[data-layer]").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("[data-layer]").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    const layer = btn.dataset.layer;
+    if (layer === "all") {
+      nodeSel.classed("dimmed", false);
+      edgeSel.classed("dimmed", false);
+    } else {
+      nodeSel.classed("dimmed", d => d.layer !== layer);
+      edgeSel.classed("dimmed", d => {
+        const s = nodeById[d.source], t = nodeById[d.target];
+        return !s || !t || (s.layer !== layer && t.layer !== layer);
+      });
+    }
+    selected = null;
+  });
+});
+
+// ---- search ----
+document.getElementById("search").addEventListener("input", function() {
+  const q = this.value.toLowerCase();
+  if (!q) {
+    nodeSel.classed("dimmed", false).classed("highlighted", false);
+    edgeSel.classed("dimmed", false);
+    return;
+  }
+  nodeSel.classed("dimmed", d => !d.label.toLowerCase().includes(q) && !d.desc.toLowerCase().includes(q));
+  nodeSel.classed("highlighted", d => d.label.toLowerCase().includes(q));
+  edgeSel.classed("dimmed", d => {
+    const s = nodeById[d.source], t = nodeById[d.target];
+    return !(s && (s.label.toLowerCase().includes(q))) && !(t && (t.label.toLowerCase().includes(q)));
+  });
+});
+</script>
+</body>
+</html>
