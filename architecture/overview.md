@@ -25,8 +25,8 @@ wazuh-helm/
 
 | Field | Value |
 |---|---|
-| Chart version | 2.5.5 |
-| App version | 4.14.10 |
+| Chart version | 3.0.0 |
+| App version | 5.0.0 |
 | API version | v2 |
 | Type | application |
 | cert-manager subchart | 1.19.3 |
@@ -35,17 +35,17 @@ wazuh-helm/
 
 Wazuh on Kubernetes consists of three core components running in the same namespace:
 
-1. **Wazuh Indexer** — OpenSearch-based data store. Receives alerts from Manager via Filebeat.
-2. **Wazuh Manager** — The SIEM engine. Master node manages agents; Worker nodes process events.
+1. **Wazuh Indexer** — OpenSearch-based data store. Receives alerts directly from Manager (no Filebeat in 5.0).
+2. **Wazuh Manager** — The SIEM engine. Master manages agents; Workers process events using the new Wazuh Engine (Sigma rules).
 3. **Wazuh Dashboard** — OpenSearch Dashboards fork. Visualises alerts and agent inventory.
-4. **Wazuh Agent** — DaemonSet deployed on every node. Ships host events to Manager.
+4. **Wazuh Agent** — DaemonSet deployed on every node. Enrolls via HTTPS (port 1517) and ships events to Manager.
 
 All inter-component traffic is TLS-encrypted using certificates issued by an in-cluster CA (cert-manager).
 
 ## 4. Wazuh Indexer
 
 - **Kind:** StatefulSet
-- **Image:** `wazuh/wazuh-indexer:4.14.10`
+- **Image:** `wazuh/wazuh-indexer:5.0.0`
 - **Default replicas:** 3 (always use odd numbers for quorum)
 - **Storage:** PVC per pod via `volumeClaimTemplates`, ReadWriteOnce
 - **Ports:** 9200 (REST/HTTPS), 9300 (transport)
@@ -69,10 +69,10 @@ The Manager runs as two separate StatefulSets sharing the same ConfigMap.
 ### 5.1 Master
 
 - **Replicas:** always 1 (fixed)
-- **Ports:** 1515 (agent enrollment/authd), 55000 (REST API), 1516 (cluster)
+- **Ports:** 1515 (authd enrollment), 1517 (HTTPS enrollment, 5.0+), 55000 (REST API), 1516 (cluster)
 - **initContainer:** Alpine runs `script.sh` to merge ossec.conf from ConfigMap into emptyDir
-- **Volumes:** manager-config (CM), filebeat-certs, api-certs (optional), wazuh-authd-pass, result-config (emptyDir)
-- **Filebeat sidecar:** ships alerts to Indexer over TLS (filebeat-tls Secret)
+- **Volumes:** manager-config (CM), remoted-certs, authd-certs, api-certs (optional), wazuh-authd-pass, result-config (emptyDir)
+- **No Filebeat sidecar in 5.0:** Manager writes alerts directly to Indexer API over HTTPS
 
 ### 5.2 Workers
 
@@ -87,7 +87,7 @@ A separate Job (`ruleset-reload`) applies updated rules/decoders to running Mana
 ## 6. Wazuh Dashboard
 
 - **Kind:** Deployment
-- **Image:** `wazuh/wazuh-dashboard:4.14.10`
+- **Image:** `wazuh/wazuh-dashboard:5.0.0`
 - **Default replicas:** 1
 - **Port:** 5601 (HTTPS)
 - **Service:** ClusterIP by default; Ingress or Gateway API HTTPRoute optional
@@ -115,7 +115,8 @@ SelfSigned Issuer
                     ├── node-tls       (Indexer nodes)
                     ├── admin-tls      (securityadmin Job)
                     ├── dashboard-tls  (Dashboard)
-                    ├── filebeat-tls   (Manager → Indexer)
+                    ├── remoted-tls    (Manager agent channel, port 1514/1517)
+                    ├── authd-tls      (Manager enrollment, ports 1515/1517)
                     └── api-tls        (Manager API, optional)
 ```
 
@@ -133,7 +134,8 @@ If `certificates.issuer.name` is set, an external issuer is used instead of the 
 | `node-tls` | tls.crt, tls.key, ca.crt | Indexer StatefulSet |
 | `admin-tls` | tls.crt, tls.key | securityadmin Job |
 | `dashboard-tls` | tls.crt, tls.key | Dashboard |
-| `filebeat-tls` | tls.crt, tls.key, ca.crt | Manager (Filebeat) |
+| `remoted-tls` | tls.crt, tls.key, ca.crt | Manager (agent channel, 5.0+) |
+| `authd-tls` | tls.crt, tls.key, ca.crt | Manager (enrollment, 5.0+) |
 | `api-tls` | tls.crt, tls.key | Manager API (optional) |
 | `<name>-securityconfig` | internal_users.yml, roles.yml, etc. | Indexer, securityadmin Job |
 
@@ -141,13 +143,13 @@ If `certificates.issuer.name` is set, an external issuer is used instead of the 
 
 | Service | Type | Port(s) | Consumers |
 |---|---|---|---|
-| `<name>-indexer` | ClusterIP | 9200 | Manager (Filebeat), Dashboard, securityadmin Job |
+| `<name>-indexer` | ClusterIP | 9200 | Manager (direct HTTPS, 5.0+), Dashboard, securityadmin Job |
 | `<name>-indexer-nodes` | Headless | 9300 | Indexer pods (transport) |
-| `<name>-manager-master` | ClusterIP | 1515, 55000 | Agent (enrollment), Dashboard (API) |
+| `<name>-manager-master` | ClusterIP | 1515, 1517, 55000 | Agent (enrollment), Dashboard (API) |
 | `<name>-manager-cluster` | Headless | 1516 | Manager Master ↔ Workers |
 | `<name>-manager-worker` | ClusterIP | 1514 | Agents (event shipping) |
 | `<name>-dashboard` | ClusterIP | 5601 | Ingress / users |
-| `<name>-manager-lb` | LoadBalancer | 1514, 1515, 55000 | External agents (optional) |
+| `<name>-manager-lb` | LoadBalancer | 1514, 1515, 1517, 55000 | External agents (optional) |
 
 ## 11. Gateway API
 
@@ -165,8 +167,8 @@ Each component has a default-deny NetworkPolicy allowing only required flows:
 
 | Policy | Allows Ingress From | Allows Egress To |
 |---|---|---|
-| Indexer | Manager (Filebeat :9200), Dashboard (:9200), securityadmin Job, Indexer pods (:9300) | DNS |
-| Manager Master | Agents (:1515, :1514), Workers (:1516), Dashboard (:55000) | Indexer (:9200), DNS |
+| Indexer | Manager (:9200), Dashboard (:9200), securityadmin Job, Indexer pods (:9300) | DNS |
+| Manager Master | Agents (:1515, :1517, :1514), Workers (:1516), Dashboard (:55000) | Indexer (:9200), DNS |
 | Manager Worker | Agents (:1514), Master (:1516) | Indexer (:9200), DNS |
 | Dashboard | Ingress/Gateway | Indexer (:9200), Manager (:55000), DNS |
 

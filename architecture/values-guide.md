@@ -52,7 +52,7 @@ All other `cert-manager.*` keys pass through to the official cert-manager chart.
 | `indexer.storageSize` | `50Gi` | PVC size per Indexer pod |
 | `indexer.storageClass` | `""` | StorageClass name (empty = cluster default) |
 | `indexer.images.repository` | `wazuh/wazuh-indexer` | Image repository |
-| `indexer.images.tag` | `4.14.10` | Image tag |
+| `indexer.images.tag` | `5.0.0` | Image tag |
 | `indexer.images.pullPolicy` | `IfNotPresent` | Image pull policy |
 | `indexer.cred.existingSecret` | `""` | Existing Secret for Indexer credentials |
 | `indexer.updateStrategy` | `RollingUpdate` | StatefulSet update strategy |
@@ -78,7 +78,7 @@ All other `cert-manager.*` keys pass through to the official cert-manager chart.
 | `dashboard.enabled` | `true` | Deploy Dashboard |
 | `dashboard.replicas` | `1` | Number of Dashboard pods |
 | `dashboard.images.repository` | `wazuh/wazuh-dashboard` | Image repository |
-| `dashboard.images.tag` | `4.14.10` | Image tag |
+| `dashboard.images.tag` | `5.0.0` | Image tag |
 | `dashboard.resources` | `{}` | CPU/memory requests and limits |
 | `dashboard.ingress.enabled` | `false` | Enable Ingress |
 | `dashboard.ingress.className` | `""` | Ingress class |
@@ -96,12 +96,14 @@ All other `cert-manager.*` keys pass through to the official cert-manager chart.
 | Parameter | Default | Description |
 |---|---|---|
 | `wazuh.images.repository` | `wazuh/wazuh-manager` | Image repository |
-| `wazuh.images.tag` | `4.14.10` | Image tag |
+| `wazuh.images.tag` | `5.0.0` | Image tag |
 | `wazuh.authd.existingSecret` | `""` | Existing Secret for authd password |
 | `wazuh.key` | `""` | Cluster key (use `wazuh.clusterKey.existingSecret` in production) |
 | `wazuh.clusterKey.existingSecret` | `""` | External Secret for cluster key |
 | `wazuh.api.certificate` | — | Manager API cert-manager Certificate config |
 | `wazuh.api.gateway.enabled` | `false` | Expose Manager API via Gateway API |
+| `wazuh.remoted.certificate.enabled` | `true` | Issue `remoted-tls` Secret for agent channel (5.0+) |
+| `wazuh.authdCert.certificate.enabled` | `true` | Issue `authd-tls` Secret for enrollment ports (5.0+) |
 
 ### 6.2 Master
 
